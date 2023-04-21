@@ -1,0 +1,30 @@
+body {
+	font-family: sans-serif;
+	max-width: 768px;
+	margin: auto;
+}
+
+h1 {
+	text-align: center;
+}
+
+h2 {
+	border-bottom: 0.1em solid grey;
+}
+
+table {
+	border-collapse: collapse;
+}
+
+th, td {
+	border: 1px solid #000;
+	padding: 0.5em 1em;
+}
+
+tr:first-child {
+	background-color: #ff7575 !important;
+}
+
+tr:nth-child(odd) {
+	background-color: #ddd;
+}
