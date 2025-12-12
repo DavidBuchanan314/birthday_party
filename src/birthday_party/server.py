@@ -1,5 +1,6 @@
 import aiohttp.web
 import argparse
+import json
 import logging
 import time
 import math
@@ -113,7 +114,7 @@ async def handle_submit_work(request: aiohttp.web.Request) -> aiohttp.web.Respon
 		username = body["username"]
 		usertoken = body["usertoken"]
 		results = body["results"]
-	except Exception:
+	except (ValueError, KeyError, json.JSONDecodeError):
 		return aiohttp.web.json_response({"status": "bad request"}, status=400)
 
 	userid = db.authenticate_user(username, usertoken)
