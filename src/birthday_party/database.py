@@ -2,9 +2,11 @@ import sqlite3
 import hmac
 from typing import Optional, List, Tuple
 
+DB_PATH = "birthdayparty.db"
+
 
 class BirthdayDB:
-	def __init__(self, db_path: str = "birthdayparty.db"):
+	def __init__(self, db_path: str = DB_PATH):
 		self.path = db_path
 		self.con = sqlite3.connect(db_path)
 		self.cur = self.con.cursor()

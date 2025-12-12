@@ -179,7 +179,7 @@ def create_app(
 	"""
 	# Initialize database if not provided
 	if db is None:
-		db = BirthdayDB("birthdayparty.db")
+		db = BirthdayDB()
 
 	# Set up Jinja2 templates if not provided
 	if jinja_env is None:

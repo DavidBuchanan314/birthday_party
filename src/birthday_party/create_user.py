@@ -5,15 +5,13 @@ import argparse
 import uuid
 from birthday_party.database import BirthdayDB
 
-DB_PATH = "birthdayparty.db"
-
 
 def create_user(username: str, password: str | None = None):
 	if password is None:
 		password = str(uuid.uuid4())
 		print(f"Generated password: {password}")
 
-	db = BirthdayDB(DB_PATH)
+	db = BirthdayDB()
 	db.create_user(username, password)
 
 
