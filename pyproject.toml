@@ -2,7 +2,7 @@
 name = "birthday_party"
 version = "0.1.0"
 description = "A coordination server for distributed hash collision search via parallel pollard rho with distinguished points"
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 dependencies = [
     "aiohttp",
     "jinja2",

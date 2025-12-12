@@ -96,8 +96,11 @@ async def handle_submit_work(request: aiohttp.web.Request) -> aiohttp.web.Respon
 		"username": "foo",
 		"usertoken": "bar",
 		"results": [
-			"start": "deadbeef",
-			"dp": "deadbeef"
+			{
+				"start": "deadbeef",
+				"dp": "deadbeef"
+			},
+			...
 		]
 	}
 	"""
