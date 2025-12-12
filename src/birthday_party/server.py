@@ -133,7 +133,7 @@ async def handle_submit_work(request: aiohttp.web.Request) -> aiohttp.web.Respon
 		if collision_result is not None:
 			num_collisions += 1
 			dpid, colliding_start = collision_result
-			logger.warning(
+			logger.info(
 				"COLLISION FOUND! start=%s colliding_start=%s dp=%s",
 				start.hex(),
 				colliding_start.hex(),
