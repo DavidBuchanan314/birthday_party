@@ -22,8 +22,6 @@ hash_length_bits_key = aiohttp.web.AppKey("hash_length", int)  # in bits
 
 def hashrate_to_string(hashrate: int | float) -> str:
 	units = ["", "K", "M", "G", "T", "P", "E"]
-	if hashrate <= 0:
-		return "0H/s"
 	if hashrate > 1:
 		unit_idx = max(round(math.log10(hashrate) / 3 - 1.0), 0)
 	else:
