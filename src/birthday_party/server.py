@@ -206,6 +206,12 @@ def create_app(
 
 def main() -> None:
 	"""Construct and run the aiohttp application."""
+	# Configure logging
+	logging.basicConfig(
+		level=logging.INFO,
+		format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+	)
+
 	parser = argparse.ArgumentParser(description="Birthday Party collision search server")
 	parser.add_argument("--dp-difficulty", type=int, default=16, help="Distinguished point difficulty in bits")
 	parser.add_argument("--hash-length", type=int, default=64, help="Hash length in bits")
