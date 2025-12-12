@@ -1,5 +1,6 @@
 import aiohttp.web
 import argparse
+import json
 import logging
 import time
 import math
@@ -113,7 +114,7 @@ async def handle_submit_work(request: aiohttp.web.Request) -> aiohttp.web.Respon
 		username = body["username"]
 		usertoken = body["usertoken"]
 		results = body["results"]
-	except Exception:
+	except (ValueError, KeyError, json.JSONDecodeError):
 		return aiohttp.web.json_response({"status": "bad request"}, status=400)
 
 	userid = db.authenticate_user(username, usertoken)
@@ -123,8 +124,13 @@ async def handle_submit_work(request: aiohttp.web.Request) -> aiohttp.web.Respon
 	good_results = []
 	num_collisions = 0
 	for result in results:
-		start = bytes.fromhex(result["start"])
-		dp = bytes.fromhex(result["dp"])
+		try:
+			start = bytes.fromhex(result["start"])
+			dp = bytes.fromhex(result["dp"])
+		except (ValueError, KeyError):
+			# ValueError from bytes.fromhex() for invalid hex strings, KeyError from missing result keys
+			return aiohttp.web.json_response({"status": "invalid result data format"}, status=400)
+
 		if len(start) * 8 != hash_length or len(dp) * 8 != hash_length:
 			return aiohttp.web.json_response({"status": "bad hash length"}, status=400)
 
