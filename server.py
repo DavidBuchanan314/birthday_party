@@ -1,16 +1,15 @@
 from aiohttp import web
 import hashlib
-import sqlite3
 import html
 import time
 import math
 import os
 
 from humanbytes import HumanBytes
+from database import BirthdayDB
 
 DB_PATH = "birthdayparty.db"
-con = sqlite3.connect(DB_PATH)
-cur = con.cursor()
+db = BirthdayDB(DB_PATH)
 
 # collision parameters
 DP_DIFFICULTY = 16 # bits
@@ -59,7 +58,7 @@ async def handle_dashboard(request):
 	res += "<h2>Stats</h2>"
 	db_size = os.path.getsize(DB_PATH)
 	res += f"<p><strong>Database size:</strong> {HumanBytes.format(db_size)}</p>"
-	dps_found = cur.execute("SELECT COUNT(*) FROM dp").fetchone()[0]
+	dps_found = db.get_dp_count()
 	res += f"<p><strong>Distinguished Points found:</strong> {dps_found:,} (2<sup>{math.log2(dps_found) if dps_found else float('NaN'):0.2f}</sup>)</p>"
 	approx_hashes = dps_found * 2**DP_DIFFICULTY
 	res += f"<p><strong>Approx. total hashes computed:</strong> {approx_hashes:,} (2<sup>{math.log2(approx_hashes) if approx_hashes else float('NaN'):0.2f}</sup>)</p>"
@@ -67,15 +66,15 @@ async def handle_dashboard(request):
 	res += f"<p><strong>Total hashes required for 50% success chance:</strong> {breakeven_hashes:,} (2<sup>{math.log2(breakeven_hashes):0.2f}</sup>) - We're {approx_hashes/breakeven_hashes*100:0.2f}% of the way there!</p>"
 	prob_success = 1-(math.e**-(approx_hashes**2/((2**(HASH_LENGTH*8))*2)))
 	res += f"<p><strong>Probability of having found at least one collision by now:</strong> {prob_success*100:0.2f}% (Note: this percentage will climb non-linearly!)</p>"
-	precollisions_found = cur.execute("SELECT COUNT(*) FROM collision").fetchone()[0]
+	precollisions_found = db.get_collision_count()
 	res += f"<p><strong>Pre-collisions found:</strong> {precollisions_found}</p>"
-	dps_last_10mins = cur.execute("SELECT COUNT(*) FROM dp WHERE dptime > UNIXEPOCH('now', '-10 minutes')").fetchone()[0]
+	dps_last_10mins = db.get_recent_dp_count(10)
 	hashrate = (dps_last_10mins * 2**DP_DIFFICULTY) / (10*60)
 	res += f"<p><strong>Network hashrate (10 min avg):</strong> {hashrate_to_string(hashrate)}</p>"
 
 	res += "<h2>Users</h2>"
 	userlist = []
-	for userid, username, dpcount in cur.execute("SELECT userid, username, userdpcount FROM user ORDER BY userdpcount DESC").fetchall():
+	for userid, username, dpcount in db.get_users_by_dpcount():
 		userlist.append((userid, username, dpcount, dpcount*(2**DP_DIFFICULTY)))
 
 	res += render_html_table(
@@ -85,7 +84,7 @@ async def handle_dashboard(request):
 
 	res += "<h2>Recent Distinguished Points</h2>"
 	dplist = []
-	for username, dpstart, dpend, dptime in cur.execute("SELECT username, dpstart, dpend, DATETIME(dptime, 'unixepoch') FROM dp INNER JOIN user ON dpuserid = userid ORDER BY dptime DESC LIMIT 10").fetchall():
+	for username, dpstart, dpend, dptime in db.get_recent_dps(10):
 		dplist.append((dptime, "<code>"+dpstart.hex()+"</code>", "<code>"+dpend.hex()+"</code>", html.escape(username)))
 	
 	res += render_html_table(
@@ -96,14 +95,7 @@ async def handle_dashboard(request):
 
 	res += "<h2>Pre-Collisions</h2>"
 	coll = []
-	for starta, startb, end, usera, userb, timestamp in cur.execute("""
-		SELECT dp1.dpstart, dp2.dpstart, dp1.dpend, user1.username, user2.username, DATETIME(dp2.dptime, 'unixepoch')
-		FROM collision
-		INNER JOIN dp AS dp1 ON colldpidone = dp1.dpid
-		INNER JOIN dp AS dp2 ON colldpidtwo = dp2.dpid
-		INNER JOIN user AS user1 ON dp1.dpuserid = user1.userid
-		INNER JOIN user AS user2 ON dp2.dpuserid = user2.userid
-	""").fetchall():
+	for starta, startb, end, usera, userb, timestamp in db.get_collisions():
 		coll.append((
 			timestamp,
 			"<code>"+starta.hex()+"</code>",
@@ -143,13 +135,9 @@ async def handle_submit_work(request):
 	except:
 		return web.json_response({"status": "bad request"}, status=400)
 	
-	userid = cur.execute(
-		"SELECT userid FROM user WHERE username=? AND usertoken=?",
-		(username, usertoken)
-	).fetchone()
+	userid = db.authenticate_user(username, usertoken)
 	if userid is None:
 		return web.json_response({"status": "bad username and/or usertoken"}, status=401)
-	userid = userid[0]
 	
 	good_results = []
 	num_collisions = 0
@@ -168,22 +156,22 @@ async def handle_submit_work(request):
 		num_good += 1
 
 		# check for collisions
-		res = cur.execute("SELECT dpid, dpstart FROM dp WHERE dpend=?", (end,)).fetchone() # XXX: assume we only collide with one
-		if res is not None:
+		collision_result = db.check_collision(end)
+		if collision_result is not None:
 			num_collisions += 1
-			dpid, colliding_start = res
+			dpid, colliding_start = collision_result
 			print("COLLISION!!!", start.hex(), colliding_start.hex(), end.hex())
 			# do dp insert now so we can grab its ID
-			cur.execute("INSERT INTO dp (dpuserid, dpstart, dpend, dptime) VALUES (?, ?, ?, UNIXEPOCH('now'))", (userid, start, end))
-			cur.execute("INSERT INTO collision (colldpidone, colldpidtwo) VALUES (?, LAST_INSERT_ROWID())", (dpid,)) # XXX: not thread safe!
+			new_dpid = db.insert_dp(userid, start, end)
+			db.insert_collision(dpid, new_dpid)
 			#exit()
 		else: # batch up "normal" results for an executemany
 			good_results.append((userid, start, end))
 
 	# add new entries
-	cur.executemany("INSERT INTO dp (dpuserid, dpstart, dpend, dptime) VALUES (?, ?, ?, UNIXEPOCH('now'))", good_results)
-	cur.execute("UPDATE user SET userdpcount = userdpcount + ? WHERE userid = ?", (num_good, userid))
-	con.commit()
+	db.insert_dps_batch(good_results)
+	db.increment_user_dpcount(userid, num_good)
+	db.commit()
 
 
 	return web.json_response({"status": f"accepted {len(good_results)} results in {(time.time()-start_time)*1000:0.2f}ms"})
