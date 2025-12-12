@@ -4,6 +4,7 @@ from typing import Optional, List, Tuple
 
 class BirthdayDB:
 	def __init__(self, db_path: str = "birthdayparty.db"):
+		self.path = db_path
 		self.con = sqlite3.connect(db_path)
 		self.cur = self.con.cursor()
 		self._init_tables()
@@ -153,7 +154,9 @@ class BirthdayDB:
 			"INSERT INTO dp (dpuserid, dpstart, dpend, dptime) VALUES (?, ?, ?, UNIXEPOCH('now'))",
 			(userid, dpstart, dpend)
 		)
-		return self.cur.lastrowid
+		dpid = self.cur.lastrowid
+		self.con.commit()
+		return dpid
 
 	def insert_collision(self, dpid_one: int, dpid_two: int):
 		"""Insert a collision record.
@@ -166,6 +169,7 @@ class BirthdayDB:
 			"INSERT INTO collision (colldpidone, colldpidtwo) VALUES (?, ?)",
 			(dpid_one, dpid_two)
 		)
+		self.con.commit()
 
 	def insert_dps_batch(self, dps: List[Tuple[int, bytes, bytes]]):
 		"""Insert multiple distinguished points at once.
@@ -177,6 +181,7 @@ class BirthdayDB:
 			"INSERT INTO dp (dpuserid, dpstart, dpend, dptime) VALUES (?, ?, ?, UNIXEPOCH('now'))",
 			dps
 		)
+		self.con.commit()
 
 	def increment_user_dpcount(self, userid: int, count: int):
 		"""Increment a user's DP count.
@@ -189,6 +194,7 @@ class BirthdayDB:
 			"UPDATE user SET userdpcount = userdpcount + ? WHERE userid = ?",
 			(count, userid)
 		)
+		self.con.commit()
 
 	def create_user(self, username: str, usertoken: str) -> int:
 		"""Create a new user.
@@ -204,7 +210,9 @@ class BirthdayDB:
 			"INSERT INTO user (username, usertoken) VALUES (?, ?)",
 			(username, usertoken)
 		)
-		return self.cur.lastrowid
+		userid = self.cur.lastrowid
+		self.con.commit()
+		return userid
 
 	def commit(self):
 		"""Commit the current transaction."""

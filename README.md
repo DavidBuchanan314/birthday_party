@@ -13,12 +13,12 @@ Distributed hash collision search dashboard
 
 ### Database Setup
 
-Initialize the database (only needed once):
+To init/reset the database and start fresh:
 ```bash
-python init_test_db.py
+python reset_db.py
 ```
 
-This creates `birthdayparty.db` with the necessary tables and test users.
+This will delete the existing database and create a new one with test users.
 
 ### Running the Server
 

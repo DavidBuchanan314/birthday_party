@@ -1,4 +1,4 @@
-from aiohttp import web
+import aiohttp.web
 import hashlib
 import time
 import math
@@ -9,30 +9,24 @@ import jinja2
 from humanbytes import HumanBytes
 from database import BirthdayDB
 
-DB_PATH = "birthdayparty.db"
-db = BirthdayDB(DB_PATH)
-
-# Set up Jinja2 templates
-template_dir = Path(__file__).parent / "templates"
-jinja_env = jinja2.Environment(
-	loader=jinja2.FileSystemLoader(template_dir),
-	autoescape=jinja2.select_autoescape(['html', 'xml'])
-)
+# Type-safe app keys
+db_key = aiohttp.web.AppKey('db', BirthdayDB)
+jinja_key = aiohttp.web.AppKey('jinja_env', jinja2.Environment)
 
 # collision parameters
 DP_DIFFICULTY = 16 # bits
 
-def HASH_FN(x):
+def HASH_FN(x: bytes) -> bytes:
 	return hashlib.md5(x.hex().encode()).digest()[:8] # half-md5
 
-def IS_DISTINGUISHED(x):
+def IS_DISTINGUISHED(x: bytes) -> bool:
 	leading_zeroes = len(x) * 8 - int.from_bytes(x, "big").bit_length()
 	return leading_zeroes >= DP_DIFFICULTY
 
 HASH_LENGTH_BYTES = len(HASH_FN(b"")) # bytes
 
 
-def hashrate_to_string(hashrate): # hashrate in hashes per second
+def hashrate_to_string(hashrate: int | float) -> str:
 	units = ["","K","M","G","T","P","E"]
 	if hashrate > 1:
 		unit_idx = max(round(math.log10(hashrate)/3 - 1.0), 0)
@@ -42,11 +36,13 @@ def hashrate_to_string(hashrate): # hashrate in hashes per second
 	return f"{round(scaled_hashrate):,}{units[unit_idx]}H/s"
 
 
-async def handle_dashboard(request):
+async def handle_dashboard(request: aiohttp.web.Request) -> aiohttp.web.Response:
 	start_time = time.time()
+	db = request.app[db_key]
+	jinja_env = request.app[jinja_key]
 
 	# Gather stats
-	db_size = HumanBytes.format(os.path.getsize(DB_PATH))
+	db_size = HumanBytes.format(os.path.getsize(db.path))
 	dps_found = db.get_dp_count()
 	approx_hashes = dps_found * 2**DP_DIFFICULTY
 	breakeven_hashes = round(math.sqrt((2**(HASH_LENGTH_BYTES*8) * 2) * math.log(2)))
@@ -95,9 +91,9 @@ async def handle_dashboard(request):
 		render_time=f"{(time.time()-start_time)*1000:0.2f}"
 	)
 
-	return web.Response(text=html_content, content_type="text/html")
+	return aiohttp.web.Response(text=html_content, content_type="text/html")
 
-async def handle_submit_work(request):
+async def handle_submit_work(request: aiohttp.web.Request) -> aiohttp.web.Response:
 	"""
 		{
 			"username": "foo",
@@ -109,6 +105,7 @@ async def handle_submit_work(request):
 		}
 	"""
 	start_time = time.time()
+	db = request.app[db_key]
 
 	try:
 		body = await request.json()
@@ -116,11 +113,11 @@ async def handle_submit_work(request):
 		usertoken = body["usertoken"]
 		results = body["results"]
 	except:
-		return web.json_response({"status": "bad request"}, status=400)
-	
+		return aiohttp.web.json_response({"status": "bad request"}, status=400)
+
 	userid = db.authenticate_user(username, usertoken)
 	if userid is None:
-		return web.json_response({"status": "bad username and/or usertoken"}, status=401)
+		return aiohttp.web.json_response({"status": "bad username and/or usertoken"}, status=401)
 	
 	good_results = []
 	num_collisions = 0
@@ -129,10 +126,10 @@ async def handle_submit_work(request):
 		start = bytes.fromhex(result["start"])
 		penultimate = bytes.fromhex(result["penultimate"])
 		if len(start) != len(penultimate) != HASH_LENGTH_BYTES:
-			return web.json_response({"status": "bad hash length"}, status=400)
+			return aiohttp.web.json_response({"status": "bad hash length"}, status=400)
 		end = HASH_FN(penultimate)
 		if not IS_DISTINGUISHED(end):
-			return web.json_response({
+			return aiohttp.web.json_response({
 				"status": f"hash({penultimate.hex()}) is not a distinguished point!"
 			}, status=400)
 		
@@ -154,17 +151,34 @@ async def handle_submit_work(request):
 	# add new entries
 	db.insert_dps_batch(good_results)
 	db.increment_user_dpcount(userid, num_good)
-	db.commit()
+
+	return aiohttp.web.json_response({"status": f"accepted {len(good_results)} results in {(time.time()-start_time)*1000:0.2f}ms"})
 
 
-	return web.json_response({"status": f"accepted {len(good_results)} results in {(time.time()-start_time)*1000:0.2f}ms"})
+def main():
+	"""Construct and run the aiohttp application."""
+	# Initialize database
+	db = BirthdayDB("birthdayparty.db")
 
-app = web.Application()
-app.add_routes([
-	web.get('/', handle_dashboard),
-	web.post('/submit_work', handle_submit_work),
-	web.static('/static', "./static/"), # TODO: let the reverse proxy handle this?
-])
+	# Set up Jinja2 templates
+	template_dir = Path(__file__).parent / "templates"
+	jinja_env = jinja2.Environment(
+		loader=jinja2.FileSystemLoader(template_dir),
+		autoescape=jinja2.select_autoescape(['html', 'xml'])
+	)
+
+	# Create app and store dependencies
+	app = aiohttp.web.Application()
+	app[db_key] = db
+	app[jinja_key] = jinja_env
+
+	app.add_routes([
+		aiohttp.web.get('/', handle_dashboard),
+		aiohttp.web.post('/submit_work', handle_submit_work),
+		aiohttp.web.static('/static', "./static/"),
+	])
+	aiohttp.web.run_app(app)
+
 
 if __name__ == '__main__':
-	web.run_app(app)
+	main()
