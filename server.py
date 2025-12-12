@@ -1,6 +1,6 @@
 from aiohttp import web
 import hashlib
-#import aiosqlite
+import sqlite3
 import html
 import time
 import math
@@ -8,8 +8,6 @@ import os
 
 from humanbytes import HumanBytes
 
-# TODO: consider whether aiosqlite would be an improvement
-import sqlite3
 DB_PATH = "birthdayparty.db"
 con = sqlite3.connect(DB_PATH)
 cur = con.cursor()
