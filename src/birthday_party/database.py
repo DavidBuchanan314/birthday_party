@@ -120,7 +120,9 @@ class BirthdayDB:
 			userid, dbtoken = result
 		else:
 			userid = None
-			dbtoken = "dummy_token_for_constant_time_comparison"
+			# Use a fixed dummy token that has similar characteristics to real tokens
+			# This ensures consistent timing for hmac.compare_digest regardless of user existence
+			dbtoken = "00000000000000000000000000000000"
 		
 		# Always perform the comparison regardless of whether user exists
 		tokens_match = hmac.compare_digest(dbtoken, usertoken)
