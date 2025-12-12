@@ -34,13 +34,6 @@ class BirthdayDB:
 		self.cur.execute("CREATE INDEX IF NOT EXISTS hashend ON dp(dpend)")
 		self.cur.execute("CREATE INDEX IF NOT EXISTS hashtime ON dp(dptime)")
 
-		# Recent table for hashrate calculations
-		self.cur.execute("""CREATE TABLE IF NOT EXISTS recent(
-			rid INTEGER PRIMARY KEY AUTOINCREMENT,
-			rdpid INTEGER NOT NULL,
-			FOREIGN KEY(rdpid) REFERENCES dp(dpid)
-		)""")
-
 		# Collision table
 		self.cur.execute("""CREATE TABLE IF NOT EXISTS collision(
 			collid INTEGER PRIMARY KEY AUTOINCREMENT,
