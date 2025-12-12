@@ -1,5 +1,6 @@
 import aiohttp.web
 import argparse
+import logging
 import time
 import math
 import os
@@ -8,6 +9,8 @@ from pathlib import Path
 import jinja2
 from birthday_party.humanbytes import HumanBytes
 from birthday_party.database import BirthdayDB
+
+logger = logging.getLogger(__name__)
 
 # Type-safe app keys
 db_key = aiohttp.web.AppKey("db", BirthdayDB)
@@ -81,7 +84,7 @@ async def handle_dashboard(request: aiohttp.web.Request) -> aiohttp.web.Response
 		users=users,
 		recent_dps=recent_dps,
 		collisions=collisions,
-		render_time=f"{(time.time()-start_time)*1000:0.2f}",
+		render_time=f"{(time.time() - start_time) * 1000:0.2f}",
 	)
 
 	return aiohttp.web.Response(text=html_content, content_type="text/html")
@@ -130,7 +133,12 @@ async def handle_submit_work(request: aiohttp.web.Request) -> aiohttp.web.Respon
 		if collision_result is not None:
 			num_collisions += 1
 			dpid, colliding_start = collision_result
-			print("COLLISION!!!", start.hex(), colliding_start.hex(), dp.hex())
+			logger.info(
+				"COLLISION FOUND! start=%s colliding_start=%s dp=%s",
+				start.hex(),
+				colliding_start.hex(),
+				dp.hex(),
+			)
 			# do dp insert now so we can grab its ID
 			new_dpid = db.insert_dp(userid, start, dp)
 			db.insert_collision(dpid, new_dpid)
@@ -143,7 +151,7 @@ async def handle_submit_work(request: aiohttp.web.Request) -> aiohttp.web.Respon
 	db.increment_user_dpcount(userid, num_good)
 
 	return aiohttp.web.json_response(
-		{"status": f"accepted {len(good_results)} results in {(time.time()-start_time)*1000:0.2f}ms"}
+		{"status": f"accepted {len(good_results)} results in {(time.time() - start_time) * 1000:0.2f}ms"}
 	)
 
 
@@ -198,6 +206,12 @@ def create_app(
 
 def main() -> None:
 	"""Construct and run the aiohttp application."""
+	# Configure logging
+	logging.basicConfig(
+		level=logging.INFO,
+		format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+	)
+
 	parser = argparse.ArgumentParser(description="Birthday Party collision search server")
 	parser.add_argument("--dp-difficulty", type=int, default=16, help="Distinguished point difficulty in bits")
 	parser.add_argument("--hash-length", type=int, default=64, help="Hash length in bits")
