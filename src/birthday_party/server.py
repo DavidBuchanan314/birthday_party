@@ -151,7 +151,8 @@ async def handle_submit_work(request: aiohttp.web.Request) -> aiohttp.web.Respon
 			else:  # batch up "normal" results for an executemany
 				good_results.append((userid, start, dp))
 	except (ValueError, KeyError):
-		return aiohttp.web.json_response({"status": "bad request"}, status=400)
+		# ValueError from bytes.fromhex() for invalid hex strings, KeyError from missing result keys
+		return aiohttp.web.json_response({"status": "invalid result data format"}, status=400)
 
 	# add new entries
 	db.insert_dps_batch(good_results)
