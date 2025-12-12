@@ -169,8 +169,8 @@ def create_app(
 	Args:
 		db: Optional BirthdayDB instance (for testing)
 		jinja_env: Optional Jinja2 Environment (for testing)
-		dp_difficulty: Distinguished point difficulty in bits (default: 16)
-		hash_length: Hash length in bytes (default: 8)
+		dp_difficulty_bits: Distinguished point difficulty in bits (default: 16)
+		hash_length_bits: Hash length in bits (default: 64)
 
 	Returns:
 		Configured aiohttp application
