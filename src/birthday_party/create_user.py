@@ -13,6 +13,7 @@ def create_user(username: str, password: str | None = None):
 
 	db = BirthdayDB()
 	db.create_user(username, password)
+	db.close()
 
 
 def main():
