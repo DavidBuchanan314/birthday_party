@@ -29,6 +29,7 @@ class HumanBytes:
 		if is_negative:  # Faster than ternary assignment or always running abs().
 			num = abs(num)
 
+		unit = None
 		for unit in unit_labels:
 			if num < unit_step_thresh:
 				# VERY IMPORTANT:

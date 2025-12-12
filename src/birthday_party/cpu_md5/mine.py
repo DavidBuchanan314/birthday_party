@@ -62,8 +62,8 @@ def mine(server_url: str, username: str, usertoken: str):
 def main():
 	parser = argparse.ArgumentParser(description="MD5 CPU miner for Birthday Party collision search")
 	parser.add_argument("username", help="Username for authentication")
+	parser.add_argument("usertoken", help="User token for authentication")
 	parser.add_argument("--server", default="http://localhost:8080/", help="Server URL")
-	parser.add_argument("--usertoken", default="foobar", help="User token for authentication")
 	args = parser.parse_args()
 
 	mine(args.server, args.username, args.usertoken)

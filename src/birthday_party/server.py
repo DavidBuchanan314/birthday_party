@@ -92,19 +92,6 @@ async def handle_dashboard(request: aiohttp.web.Request) -> aiohttp.web.Response
 
 
 async def handle_submit_work(request: aiohttp.web.Request) -> aiohttp.web.Response:
-	"""
-	{
-		"username": "foo",
-		"usertoken": "bar",
-		"results": [
-			{
-				"start": "deadbeef",
-				"dp": "deadbeef"
-			},
-			...
-		]
-	}
-	"""
 	start_time = time.time()
 	db = request.app[db_key]
 	hash_length = request.app[hash_length_bits_key]
