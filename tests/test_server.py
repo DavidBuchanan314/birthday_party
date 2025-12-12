@@ -111,20 +111,39 @@ class TestIntegration:
 
 	async def test_user_stats_update_after_submission(self, client: TestClient, test_db: BirthdayDB) -> None:
 		"""Test that user stats update after submitting valid work."""
-		# We need to construct a valid submission, but since we can't easily generate
-		# a real distinguished point without implementing the hash function in the test,
-		# we'll skip this for now and just test the authentication flow
-
-		# Verify empty submission works
+		# The server doesn't check distinguished-ness, only hash length
+		# So we can submit any 8-byte (64-bit) hashes
+		
+		# Get initial DP count for alice
+		users = {username: dpcount for _, username, dpcount in test_db.get_users_by_dpcount()}
+		initial_dpcount = users.get("alice", 0)
+		
+		# Submit valid work with proper hash lengths (8 bytes for 64-bit hashes)
 		resp = await client.post(
 			"/submit_work",
 			json={
 				"username": "alice",
 				"usertoken": "alicetoken",
-				"results": [],
+				"results": [
+					{
+						"start": "deadbeefcafebabe",  # 8 bytes = 64 bits
+						"dp": "0123456789abcdef",     # 8 bytes = 64 bits
+					},
+					{
+						"start": "1111111111111111",
+						"dp": "2222222222222222",
+					},
+				],
 			},
 		)
 		assert resp.status == 200
+		data = await resp.json()
+		assert "accepted 2 results" in data["status"]
+		
+		# Verify user stats were updated
+		users = {username: dpcount for _, username, dpcount in test_db.get_users_by_dpcount()}
+		final_dpcount = users.get("alice", 0)
+		assert final_dpcount == initial_dpcount + 2
 
 	async def test_dashboard_reflects_database_state(self, client: TestClient, test_db: BirthdayDB) -> None:
 		"""Test that dashboard shows current database state."""
