@@ -1,5 +1,5 @@
 import aiohttp.web
-import hashlib
+import argparse
 import time
 import math
 import os
@@ -12,21 +12,8 @@ from birthday_party.database import BirthdayDB
 # Type-safe app keys
 db_key = aiohttp.web.AppKey("db", BirthdayDB)
 jinja_key = aiohttp.web.AppKey("jinja_env", jinja2.Environment)
-
-# collision parameters
-DP_DIFFICULTY = 16  # bits
-
-
-def HASH_FN(x: bytes) -> bytes:
-	return hashlib.md5(x.hex().encode()).digest()[:8]  # half-md5
-
-
-def IS_DISTINGUISHED(x: bytes) -> bool:
-	leading_zeroes = len(x) * 8 - int.from_bytes(x, "big").bit_length()
-	return leading_zeroes >= DP_DIFFICULTY
-
-
-HASH_LENGTH_BYTES = len(HASH_FN(b""))  # bytes
+dp_difficulty_bits_key = aiohttp.web.AppKey("dp_difficulty", int)  # in bits
+hash_length_bits_key = aiohttp.web.AppKey("hash_length", int)  # in bits
 
 
 def hashrate_to_string(hashrate: int | float) -> str:
@@ -43,20 +30,22 @@ async def handle_dashboard(request: aiohttp.web.Request) -> aiohttp.web.Response
 	start_time = time.time()
 	db = request.app[db_key]
 	jinja_env = request.app[jinja_key]
+	dp_difficulty = request.app[dp_difficulty_bits_key]
+	hash_length_bits = request.app[hash_length_bits_key]
 
 	# Gather stats
 	db_size = HumanBytes.format(os.path.getsize(db.path))
 	dps_found = db.get_dp_count()
-	approx_hashes = dps_found * 2**DP_DIFFICULTY
-	breakeven_hashes = round(math.sqrt((2 ** (HASH_LENGTH_BYTES * 8) * 2) * math.log(2)))
-	prob_success = 1 - (math.e ** -(approx_hashes**2 / ((2 ** (HASH_LENGTH_BYTES * 8)) * 2)))
+	approx_hashes = dps_found * 2**dp_difficulty
+	breakeven_hashes = round(math.sqrt((2**hash_length_bits * 2) * math.log(2)))
+	prob_success = 1 - (math.e ** -(approx_hashes**2 / ((2**hash_length_bits) * 2)))
 	precollisions_found = db.get_collision_count()
 	dps_last_10mins = db.get_recent_dp_count(10)
-	hashrate = (dps_last_10mins * 2**DP_DIFFICULTY) / (10 * 60)
+	hashrate = (dps_last_10mins * 2**dp_difficulty) / (10 * 60)
 
 	# Prepare user list
 	users = [
-		(userid, username, dpcount, dpcount * (2**DP_DIFFICULTY))
+		(userid, username, dpcount, dpcount * (2**dp_difficulty))
 		for userid, username, dpcount in db.get_users_by_dpcount()
 	]
 
@@ -74,8 +63,8 @@ async def handle_dashboard(request: aiohttp.web.Request) -> aiohttp.web.Response
 	# Render template
 	template = jinja_env.get_template("dashboard.html")
 	html_content = template.render(
-		hash_length_bits=HASH_LENGTH_BYTES * 8,
-		dp_difficulty=DP_DIFFICULTY,
+		hash_length_bits=hash_length_bits,
+		dp_difficulty=dp_difficulty,
 		db_size=db_size,
 		dps_found_formatted=f"{dps_found:,}",
 		dps_log=f"{math.log2(dps_found) if dps_found else float('NaN'):0.2f}",
@@ -103,12 +92,13 @@ async def handle_submit_work(request: aiohttp.web.Request) -> aiohttp.web.Respon
 		"usertoken": "bar",
 		"results": [
 			"start": "deadbeef",
-			"penultimate": "deadbeef"
+			"dp": "deadbeef"
 		]
 	}
 	"""
 	start_time = time.time()
 	db = request.app[db_key]
+	hash_length = request.app[hash_length_bits_key]
 
 	try:
 		body = await request.json()
@@ -127,29 +117,24 @@ async def handle_submit_work(request: aiohttp.web.Request) -> aiohttp.web.Respon
 	num_good = 0
 	for result in results:
 		start = bytes.fromhex(result["start"])
-		penultimate = bytes.fromhex(result["penultimate"])
-		if len(start) != len(penultimate) != HASH_LENGTH_BYTES:
+		dp = bytes.fromhex(result["dp"])
+		if len(start) != hash_length or len(dp) != hash_length:
 			return aiohttp.web.json_response({"status": "bad hash length"}, status=400)
-		end = HASH_FN(penultimate)
-		if not IS_DISTINGUISHED(end):
-			return aiohttp.web.json_response(
-				{"status": f"hash({penultimate.hex()}) is not a distinguished point!"}, status=400
-			)
 
 		num_good += 1
 
 		# check for collisions
-		collision_result = db.check_collision(end)
+		collision_result = db.check_collision(dp)
 		if collision_result is not None:
 			num_collisions += 1
 			dpid, colliding_start = collision_result
-			print("COLLISION!!!", start.hex(), colliding_start.hex(), end.hex())
+			print("COLLISION!!!", start.hex(), colliding_start.hex(), dp.hex())
 			# do dp insert now so we can grab its ID
-			new_dpid = db.insert_dp(userid, start, end)
+			new_dpid = db.insert_dp(userid, start, dp)
 			db.insert_collision(dpid, new_dpid)
 			# exit()
 		else:  # batch up "normal" results for an executemany
-			good_results.append((userid, start, end))
+			good_results.append((userid, start, dp))
 
 	# add new entries
 	db.insert_dps_batch(good_results)
@@ -160,12 +145,19 @@ async def handle_submit_work(request: aiohttp.web.Request) -> aiohttp.web.Respon
 	)
 
 
-def create_app(db: BirthdayDB | None = None, jinja_env: jinja2.Environment | None = None) -> aiohttp.web.Application:
+def create_app(
+	db: BirthdayDB | None = None,
+	jinja_env: jinja2.Environment | None = None,
+	dp_difficulty_bits: int = 16,
+	hash_length_bits: int = 64,
+) -> aiohttp.web.Application:
 	"""Create and configure the aiohttp application.
 
 	Args:
 		db: Optional BirthdayDB instance (for testing)
 		jinja_env: Optional Jinja2 Environment (for testing)
+		dp_difficulty: Distinguished point difficulty in bits (default: 16)
+		hash_length: Hash length in bytes (default: 8)
 
 	Returns:
 		Configured aiohttp application
@@ -188,6 +180,8 @@ def create_app(db: BirthdayDB | None = None, jinja_env: jinja2.Environment | Non
 	app = aiohttp.web.Application()
 	app[db_key] = db
 	app[jinja_key] = jinja_env
+	app[dp_difficulty_bits_key] = dp_difficulty_bits
+	app[hash_length_bits_key] = hash_length_bits
 
 	app.add_routes(
 		[
@@ -202,7 +196,12 @@ def create_app(db: BirthdayDB | None = None, jinja_env: jinja2.Environment | Non
 
 def main() -> None:
 	"""Construct and run the aiohttp application."""
-	app = create_app()
+	parser = argparse.ArgumentParser(description="Birthday Party collision search server")
+	parser.add_argument("--dp-difficulty", type=int, default=16, help="Distinguished point difficulty in bits")
+	parser.add_argument("--hash-length", type=int, default=64, help="Hash length in bits")
+	args = parser.parse_args()
+
+	app = create_app(dp_difficulty_bits=args.dp_difficulty, hash_length_bits=args.hash_length)
 	aiohttp.web.run_app(app)
 
 

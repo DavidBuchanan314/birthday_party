@@ -96,37 +96,14 @@ class TestSubmitWork:
 				"results": [
 					{
 						"start": "deadbeef",  # Too short (4 bytes instead of 8)
-						"penultimate": "deadbeef",
+						"dp": "deadbeef",
 					}
 				],
 			},
 		)
 		assert resp.status == 400
 		data = await resp.json()
-		# The error could be either bad hash length or not distinguished point
-		# depending on which check runs first
-		assert data["status"] in ["bad hash length", "hash(deadbeef) is not a distinguished point!"]
-
-	async def test_submit_work_validates_distinguished_point(self, client: TestClient) -> None:
-		"""Test that non-distinguished points are rejected."""
-		# Use a valid length hash that is not distinguished
-		valid_hash = "ff" * 8  # 8 bytes, but not a distinguished point
-		resp = await client.post(
-			"/submit_work",
-			json={
-				"username": "testuser",
-				"usertoken": "testtoken",
-				"results": [
-					{
-						"start": valid_hash,
-						"penultimate": valid_hash,
-					}
-				],
-			},
-		)
-		assert resp.status == 400
-		data = await resp.json()
-		assert "not a distinguished point" in data["status"]
+		assert data["status"] == "bad hash length"
 
 
 class TestIntegration:
