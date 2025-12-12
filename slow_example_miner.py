@@ -42,13 +42,12 @@ report = []
 point = os.urandom(HASH_LENGTH)
 start_point = point
 while True:
-	prev_point = point
 	point = HASH_FN(point)
 	if IS_DISTINGUISHED(point):
 		report.append(
 			{
 				"start": start_point.hex(),
-				"penultimate": prev_point.hex(),
+				"dp": point.hex(),
 			}
 		)
 		delta = time.time() - prev_report

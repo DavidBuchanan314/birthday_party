@@ -1,4 +1,5 @@
 import sqlite3
+import hmac
 from typing import Optional, List, Tuple
 
 
@@ -118,10 +119,13 @@ class BirthdayDB:
 		Returns:
 			The userid if authentication succeeds, None otherwise
 		"""
-		result = self.cur.execute(
-			"SELECT userid FROM user WHERE username=? AND usertoken=?", (username, usertoken)
-		).fetchone()
-		return result[0] if result else None
+		result = self.cur.execute("SELECT userid, usertoken FROM user WHERE username=?", (username,)).fetchone()
+		if not result:
+			return None
+		userid, dbtoken = result
+		if not hmac.compare_digest(dbtoken, usertoken):
+			return None
+		return userid
 
 	def check_collision(self, dpend: bytes) -> Optional[Tuple[int, bytes]]:
 		"""Check if a DP end hash already exists (collision detection).
@@ -151,6 +155,8 @@ class BirthdayDB:
 			(userid, dpstart, dpend),
 		)
 		dpid = self.cur.lastrowid
+		if dpid is None:
+			raise Exception("failed to insert dp")
 		self.con.commit()
 		return dpid
 
@@ -197,6 +203,8 @@ class BirthdayDB:
 		"""
 		self.cur.execute("INSERT INTO user (username, usertoken) VALUES (?, ?)", (username, usertoken))
 		userid = self.cur.lastrowid
+		if userid is None:
+			raise Exception("failed to insert user")
 		self.con.commit()
 		return userid
 

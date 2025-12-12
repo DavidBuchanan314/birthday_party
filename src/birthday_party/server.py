@@ -118,7 +118,7 @@ async def handle_submit_work(request: aiohttp.web.Request) -> aiohttp.web.Respon
 	for result in results:
 		start = bytes.fromhex(result["start"])
 		dp = bytes.fromhex(result["dp"])
-		if len(start) != hash_length or len(dp) != hash_length:
+		if len(start) * 8 != hash_length or len(dp) * 8 != hash_length:
 			return aiohttp.web.json_response({"status": "bad hash length"}, status=400)
 
 		num_good += 1
