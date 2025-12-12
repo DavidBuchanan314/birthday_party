@@ -122,14 +122,11 @@ async def handle_submit_work(request: aiohttp.web.Request) -> aiohttp.web.Respon
 
 	good_results = []
 	num_collisions = 0
-	num_good = 0
 	for result in results:
 		start = bytes.fromhex(result["start"])
 		dp = bytes.fromhex(result["dp"])
 		if len(start) * 8 != hash_length or len(dp) * 8 != hash_length:
 			return aiohttp.web.json_response({"status": "bad hash length"}, status=400)
-
-		num_good += 1
 
 		# check for collisions
 		collision_result = db.check_collision(dp)
@@ -150,10 +147,10 @@ async def handle_submit_work(request: aiohttp.web.Request) -> aiohttp.web.Respon
 
 	# add new entries
 	db.insert_dps_batch(good_results)
-	db.increment_user_dpcount(userid, num_good)
+	db.increment_user_dpcount(userid, len(results))
 
 	return aiohttp.web.json_response(
-		{"status": f"accepted {len(good_results)} results in {(time.time() - start_time) * 1000:0.2f}ms"}
+		{"status": f"accepted {len(results)} results in {(time.time() - start_time) * 1000:0.2f}ms"}
 	)
 
 
