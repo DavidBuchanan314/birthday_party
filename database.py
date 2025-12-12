@@ -62,8 +62,7 @@ class BirthdayDB:
 	def get_recent_dp_count(self, minutes: int = 10) -> int:
 		"""Get number of DPs found in the last N minutes."""
 		return self.cur.execute(
-			"SELECT COUNT(*) FROM dp WHERE dptime > UNIXEPOCH('now', ?)",
-			(f'-{minutes} minutes',)
+			"SELECT COUNT(*) FROM dp WHERE dptime > UNIXEPOCH('now', ?)", (f"-{minutes} minutes",)
 		).fetchone()[0]
 
 	def get_users_by_dpcount(self) -> List[Tuple[int, str, int]]:
@@ -72,9 +71,7 @@ class BirthdayDB:
 		Returns:
 			List of (userid, username, userdpcount) tuples
 		"""
-		return self.cur.execute(
-			"SELECT userid, username, userdpcount FROM user ORDER BY userdpcount DESC"
-		).fetchall()
+		return self.cur.execute("SELECT userid, username, userdpcount FROM user ORDER BY userdpcount DESC").fetchall()
 
 	def get_recent_dps(self, limit: int = 10) -> List[Tuple[str, bytes, bytes, str]]:
 		"""Get the most recent distinguished points.
@@ -85,13 +82,16 @@ class BirthdayDB:
 		Returns:
 			List of (username, dpstart, dpend, dptime) tuples
 		"""
-		return self.cur.execute("""
+		return self.cur.execute(
+			"""
 			SELECT username, dpstart, dpend, DATETIME(dptime, 'unixepoch')
 			FROM dp
 			INNER JOIN user ON dpuserid = userid
 			ORDER BY dptime DESC
 			LIMIT ?
-		""", (limit,)).fetchall()
+		""",
+			(limit,),
+		).fetchall()
 
 	def get_collisions(self) -> List[Tuple[bytes, bytes, bytes, str, str, str]]:
 		"""Get all pre-collisions with details.
@@ -119,8 +119,7 @@ class BirthdayDB:
 			The userid if authentication succeeds, None otherwise
 		"""
 		result = self.cur.execute(
-			"SELECT userid FROM user WHERE username=? AND usertoken=?",
-			(username, usertoken)
+			"SELECT userid FROM user WHERE username=? AND usertoken=?", (username, usertoken)
 		).fetchone()
 		return result[0] if result else None
 
@@ -133,10 +132,7 @@ class BirthdayDB:
 		Returns:
 			Tuple of (dpid, dpstart) if collision found, None otherwise
 		"""
-		result = self.cur.execute(
-			"SELECT dpid, dpstart FROM dp WHERE dpend=?",
-			(dpend,)
-		).fetchone()
+		result = self.cur.execute("SELECT dpid, dpstart FROM dp WHERE dpend=?", (dpend,)).fetchone()
 		return result if result else None
 
 	def insert_dp(self, userid: int, dpstart: bytes, dpend: bytes) -> int:
@@ -152,7 +148,7 @@ class BirthdayDB:
 		"""
 		self.cur.execute(
 			"INSERT INTO dp (dpuserid, dpstart, dpend, dptime) VALUES (?, ?, ?, UNIXEPOCH('now'))",
-			(userid, dpstart, dpend)
+			(userid, dpstart, dpend),
 		)
 		dpid = self.cur.lastrowid
 		self.con.commit()
@@ -165,10 +161,7 @@ class BirthdayDB:
 			dpid_one: First DP ID in the collision
 			dpid_two: Second DP ID in the collision
 		"""
-		self.cur.execute(
-			"INSERT INTO collision (colldpidone, colldpidtwo) VALUES (?, ?)",
-			(dpid_one, dpid_two)
-		)
+		self.cur.execute("INSERT INTO collision (colldpidone, colldpidtwo) VALUES (?, ?)", (dpid_one, dpid_two))
 		self.con.commit()
 
 	def insert_dps_batch(self, dps: List[Tuple[int, bytes, bytes]]):
@@ -178,8 +171,7 @@ class BirthdayDB:
 			dps: List of (userid, dpstart, dpend) tuples
 		"""
 		self.cur.executemany(
-			"INSERT INTO dp (dpuserid, dpstart, dpend, dptime) VALUES (?, ?, ?, UNIXEPOCH('now'))",
-			dps
+			"INSERT INTO dp (dpuserid, dpstart, dpend, dptime) VALUES (?, ?, ?, UNIXEPOCH('now'))", dps
 		)
 		self.con.commit()
 
@@ -190,10 +182,7 @@ class BirthdayDB:
 			userid: The user ID
 			count: Amount to increment by
 		"""
-		self.cur.execute(
-			"UPDATE user SET userdpcount = userdpcount + ? WHERE userid = ?",
-			(count, userid)
-		)
+		self.cur.execute("UPDATE user SET userdpcount = userdpcount + ? WHERE userid = ?", (count, userid))
 		self.con.commit()
 
 	def create_user(self, username: str, usertoken: str) -> int:
@@ -206,10 +195,7 @@ class BirthdayDB:
 		Returns:
 			The userid of the created user
 		"""
-		self.cur.execute(
-			"INSERT INTO user (username, usertoken) VALUES (?, ?)",
-			(username, usertoken)
-		)
+		self.cur.execute("INSERT INTO user (username, usertoken) VALUES (?, ?)", (username, usertoken))
 		userid = self.cur.lastrowid
 		self.con.commit()
 		return userid
