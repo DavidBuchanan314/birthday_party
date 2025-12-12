@@ -160,16 +160,26 @@ async def handle_submit_work(request: aiohttp.web.Request) -> aiohttp.web.Respon
 	)
 
 
-def main():
-	"""Construct and run the aiohttp application."""
-	# Initialize database
-	db = BirthdayDB("birthdayparty.db")
+def create_app(db: BirthdayDB | None = None, jinja_env: jinja2.Environment | None = None) -> aiohttp.web.Application:
+	"""Create and configure the aiohttp application.
 
-	# Set up Jinja2 templates
-	template_dir = Path(__file__).parent / "templates"
-	jinja_env = jinja2.Environment(
-		loader=jinja2.FileSystemLoader(template_dir), autoescape=jinja2.select_autoescape(["html", "xml"])
-	)
+	Args:
+		db: Optional BirthdayDB instance (for testing)
+		jinja_env: Optional Jinja2 Environment (for testing)
+
+	Returns:
+		Configured aiohttp application
+	"""
+	# Initialize database if not provided
+	if db is None:
+		db = BirthdayDB("birthdayparty.db")
+
+	# Set up Jinja2 templates if not provided
+	if jinja_env is None:
+		template_dir = Path(__file__).parent / "templates"
+		jinja_env = jinja2.Environment(
+			loader=jinja2.FileSystemLoader(template_dir), autoescape=jinja2.select_autoescape(["html", "xml"])
+		)
 
 	# Create app and store dependencies
 	app = aiohttp.web.Application()
@@ -183,6 +193,13 @@ def main():
 			aiohttp.web.static("/static", "./static/"),
 		]
 	)
+
+	return app
+
+
+def main() -> None:
+	"""Construct and run the aiohttp application."""
+	app = create_app()
 	aiohttp.web.run_app(app)
 
 

@@ -23,7 +23,7 @@ Distributed hash collision search dashboard
 
 To init/reset the database and start fresh:
 ```bash
-python reset_db.py
+python src/reset_db.py
 ```
 
 This will delete the existing database and create a new one with test users.
@@ -32,10 +32,32 @@ This will delete the existing database and create a new one with test users.
 
 Start the development server:
 ```bash
-python server.py
+python src/server.py
 ```
 
 The server will run on `http://localhost:8080` by default.
+
+### Testing
+
+Run the integration test suite:
+```bash
+pytest
+```
+
+Run with verbose output:
+```bash
+pytest -v
+```
+
+Run a specific test file:
+```bash
+pytest tests/test_server.py
+```
+
+Run tests with coverage:
+```bash
+pytest --cov=src
+```
 
 ### Code Formatting
 
