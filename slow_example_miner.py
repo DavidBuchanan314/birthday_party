@@ -7,7 +7,7 @@ import sys
 SERVER = "http://localhost:8080/"
 
 # collision parameters (MUST BE SAME AS SERVER'S!!!)
-DP_DIFFICULTY = 8 # bits
+DP_DIFFICULTY = 16 # bits
 
 def HASH_FN(x):
 	return hashlib.md5(x.hex().encode()).digest()[:8] # half-md5

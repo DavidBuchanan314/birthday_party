@@ -15,7 +15,7 @@ con = sqlite3.connect(DB_PATH)
 cur = con.cursor()
 
 # collision parameters
-DP_DIFFICULTY = 8 # bits
+DP_DIFFICULTY = 16 # bits
 
 def HASH_FN(x):
 	return hashlib.md5(x.hex().encode()).digest()[:8] # half-md5
@@ -53,7 +53,7 @@ async def handle_dashboard(request):
 	res += '<head><meta charset="UTF-8"><link rel="stylesheet" href="/static/style.css"></head>'
 	res += "<body>"
 	res += "<h1>Birthday Party 🥳</h1>"
-	res += "<p>A distributed search for hash collisions.</p>"
+	res += '<p>A distributed search for hash collisions, leveraging the <a href="https://en.wikipedia.org/wiki/Birthday_problem">Birthday Paradox</a>, using <a href="https://www.cs.csi.cuny.edu/~zhangx/papers/P_2018_LISAT_Weber_Zhang.pdf">"Parallel Hash Collision Search by Rho Method with Distinguished Points"</a> (Brian Weber and Xiaowen Zhang, 2018).</p>'
 	res += "<h2>Config</h2>"
 	res += f"<p><strong>Target collision length:</strong> {HASH_LENGTH*8} bits</p>"
 	res += f"<p><strong>Distinguished Point difficulty:</strong> {DP_DIFFICULTY} bits</p>"
@@ -71,9 +71,9 @@ async def handle_dashboard(request):
 	res += f"<p><strong>Probability of having found at least one collision by now:</strong> {prob_success*100:0.2f}% (Note: this percentage will climb non-linearly!)</p>"
 	precollisions_found = cur.execute("SELECT COUNT(*) FROM collision").fetchone()[0]
 	res += f"<p><strong>Pre-collisions found:</strong> {precollisions_found}</p>"
-	#dps_last_10mins = cur.execute("SELECT COUNT(*) FROM dp WHERE dptime > UNIXEPOCH('now', '-10 minutes')").fetchone()[0]
-	#hashrate = (dps_last_10mins * 2**DP_DIFFICULTY) / (10*60)
-	#res += f"<p><strong>Network hashrate (10 min avg):</strong> {hashrate_to_string(hashrate)}</p>"
+	dps_last_10mins = cur.execute("SELECT COUNT(*) FROM dp WHERE dptime > UNIXEPOCH('now', '-10 minutes')").fetchone()[0]
+	hashrate = (dps_last_10mins * 2**DP_DIFFICULTY) / (10*60)
+	res += f"<p><strong>Network hashrate (10 min avg):</strong> {hashrate_to_string(hashrate)}</p>"
 
 	res += "<h2>Users</h2>"
 	userlist = []

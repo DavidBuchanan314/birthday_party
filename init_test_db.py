@@ -27,6 +27,14 @@ cur.execute("""CREATE TABLE dp(
 cur.execute("CREATE INDEX hashend ON dp(dpend);")
 cur.execute("CREATE INDEX hashtime ON dp(dptime);") # for listing most recent finds
 
+# separate table for keeping track of recently found DPs
+# used to calculate hashrate stats without needing to search thru the whole dp table
+cur.execute("""CREATE TABLE recent(
+	rid INTEGER PRIMARY KEY AUTOINCREMENT,
+	rdpid INTEGER NOT NULL,
+	FOREIGN KEY(rdpid) REFERENCES dp(dpid)
+)""")
+
 cur.execute("""CREATE TABLE collision(
 	collid INTEGER PRIMARY KEY AUTOINCREMENT,
 	colldpidone INTEGER NOT NULL,
