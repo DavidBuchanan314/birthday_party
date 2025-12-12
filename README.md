@@ -54,11 +54,6 @@ Run a specific test file:
 pytest tests/test_server.py
 ```
 
-Run tests with coverage:
-```bash
-pytest --cov=src
-```
-
 ### Code Formatting
 
 The project uses Ruff for formatting (with tabs for indentation).
