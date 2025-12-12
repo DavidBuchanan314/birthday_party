@@ -113,12 +113,22 @@ class BirthdayDB:
 			The userid if authentication succeeds, None otherwise
 		"""
 		result = self.cur.execute("SELECT userid, usertoken FROM user WHERE username=?", (username,)).fetchone()
-		if not result:
-			return None
-		userid, dbtoken = result
-		if not hmac.compare_digest(dbtoken, usertoken):
-			return None
-		return userid
+		
+		# Use constant-time comparison to prevent timing-based user enumeration
+		# Always compare tokens even if user doesn't exist (using dummy value)
+		if result:
+			userid, dbtoken = result
+		else:
+			userid = None
+			dbtoken = "dummy_token_for_constant_time_comparison"
+		
+		# Always perform the comparison regardless of whether user exists
+		tokens_match = hmac.compare_digest(dbtoken, usertoken)
+		
+		# Only return userid if both user exists and tokens match
+		if result and tokens_match:
+			return userid
+		return None
 
 	def check_collision(self, dpend: bytes) -> Optional[Tuple[int, bytes]]:
 		"""Check if a DP end hash already exists (collision detection).
