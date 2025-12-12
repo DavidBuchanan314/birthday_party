@@ -92,7 +92,7 @@ async def handle_dashboard(request: aiohttp.web.Request) -> aiohttp.web.Response
 async def handle_submit_work(request: aiohttp.web.Request) -> aiohttp.web.Response:
 	start_time = time.time()
 	db = request.app[db_key]
-	hash_length = request.app[hash_length_bits_key]
+	hash_length_bits = request.app[hash_length_bits_key]
 
 	try:
 		body = await request.json()
@@ -116,7 +116,7 @@ async def handle_submit_work(request: aiohttp.web.Request) -> aiohttp.web.Respon
 			# ValueError from bytes.fromhex() for invalid hex strings, KeyError from missing result keys
 			return aiohttp.web.json_response({"status": "invalid result data format"}, status=400)
 
-		if len(start) * 8 != hash_length or len(dp) * 8 != hash_length:
+		if len(start) * 8 != hash_length_bits or len(dp) * 8 != hash_length_bits:
 			return aiohttp.web.json_response({"status": "bad hash length"}, status=400)
 
 		# check for collisions
