@@ -145,7 +145,6 @@ async def handle_submit_work(request: aiohttp.web.Request) -> aiohttp.web.Respon
 			# do dp insert now so we can grab its ID
 			new_dpid = db.insert_dp(userid, start, dp)
 			db.insert_collision(dpid, new_dpid)
-			# exit()
 		else:  # batch up "normal" results for an executemany
 			good_results.append((userid, start, dp))
 
