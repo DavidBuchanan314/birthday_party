@@ -1,0 +1,12 @@
+[project]
+name = "birthday-party"
+version = "0.1.0"
+description = "A coordination server for distributed search for hash collisions via parallel pollard rho with distinguished points"
+requires-python = ">=3.8"
+dependencies = [
+    "aiohttp",
+]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
