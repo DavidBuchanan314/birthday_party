@@ -220,10 +220,12 @@ def main() -> None:
 	parser = argparse.ArgumentParser(description="Birthday Party collision search server")
 	parser.add_argument("--dp-difficulty", type=int, default=16, help="Distinguished point difficulty in bits")
 	parser.add_argument("--hash-length", type=int, default=64, help="Hash length in bits")
+	parser.add_argument("--host", type=str, default="localhost", help="Host to bind to")
+	parser.add_argument("--port", type=int, default=8080, help="Port to bind to")
 	args = parser.parse_args()
 
 	app = create_app(dp_difficulty_bits=args.dp_difficulty, hash_length_bits=args.hash_length)
-	aiohttp.web.run_app(app)
+	aiohttp.web.run_app(app, host=args.host, port=args.port)
 
 
 if __name__ == "__main__":
