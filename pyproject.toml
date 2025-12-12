@@ -1,5 +1,5 @@
 [project]
-name = "birthday-party"
+name = "birthday_party"
 version = "0.1.0"
 description = "A coordination server for distributed hash collision search via parallel pollard rho with distinguished points"
 requires-python = ">=3.8"
@@ -19,6 +19,9 @@ dev = [
 [build-system]
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
 
 [tool.ruff]
 line-length = 120

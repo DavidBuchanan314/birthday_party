@@ -6,8 +6,8 @@ import os
 from pathlib import Path
 
 import jinja2
-from humanbytes import HumanBytes
-from database import BirthdayDB
+from birthday_party.humanbytes import HumanBytes
+from birthday_party.database import BirthdayDB
 
 # Type-safe app keys
 db_key = aiohttp.web.AppKey("db", BirthdayDB)
@@ -181,6 +181,9 @@ def create_app(db: BirthdayDB | None = None, jinja_env: jinja2.Environment | Non
 			loader=jinja2.FileSystemLoader(template_dir), autoescape=jinja2.select_autoescape(["html", "xml"])
 		)
 
+	# Calculate static directory path
+	static_dir = Path(__file__).parent / "static"
+
 	# Create app and store dependencies
 	app = aiohttp.web.Application()
 	app[db_key] = db
@@ -190,7 +193,7 @@ def create_app(db: BirthdayDB | None = None, jinja_env: jinja2.Environment | Non
 		[
 			aiohttp.web.get("/", handle_dashboard),
 			aiohttp.web.post("/submit_work", handle_submit_work),
-			aiohttp.web.static("/static", "./static/"),
+			aiohttp.web.static("/static", static_dir),
 		]
 	)
 

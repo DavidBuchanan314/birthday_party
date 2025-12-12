@@ -2,7 +2,7 @@
 """Helper script to reset the database and create a test user."""
 
 import os
-from database import BirthdayDB
+from birthday_party.database import BirthdayDB
 
 DB_PATH = "birthdayparty.db"
 

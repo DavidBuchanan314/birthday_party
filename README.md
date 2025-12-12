@@ -23,7 +23,7 @@ Distributed hash collision search dashboard
 
 To init/reset the database and start fresh:
 ```bash
-python src/reset_db.py
+python3 -m birthday_party.reset_db
 ```
 
 This will delete the existing database and create a new one with test users.
@@ -32,7 +32,7 @@ This will delete the existing database and create a new one with test users.
 
 Start the development server:
 ```bash
-python src/server.py
+python3 -m birthday_party.server
 ```
 
 The server will run on `http://localhost:8080` by default.
