@@ -124,35 +124,36 @@ async def handle_submit_work(request: aiohttp.web.Request) -> aiohttp.web.Respon
 	good_results = []
 	num_collisions = 0
 	num_good = 0
-	try:
-		for result in results:
+	for result in results:
+		try:
 			start = bytes.fromhex(result["start"])
 			dp = bytes.fromhex(result["dp"])
-			if len(start) * 8 != hash_length or len(dp) * 8 != hash_length:
-				return aiohttp.web.json_response({"status": "bad hash length"}, status=400)
+		except (ValueError, KeyError):
+			# ValueError from bytes.fromhex() for invalid hex strings, KeyError from missing result keys
+			return aiohttp.web.json_response({"status": "invalid result data format"}, status=400)
 
-			num_good += 1
+		if len(start) * 8 != hash_length or len(dp) * 8 != hash_length:
+			return aiohttp.web.json_response({"status": "bad hash length"}, status=400)
 
-			# check for collisions
-			collision_result = db.check_collision(dp)
-			if collision_result is not None:
-				num_collisions += 1
-				dpid, colliding_start = collision_result
-				logger.info(
-					"COLLISION FOUND! start=%s colliding_start=%s dp=%s",
-					start.hex(),
-					colliding_start.hex(),
-					dp.hex(),
-				)
-				# do dp insert now so we can grab its ID
-				new_dpid = db.insert_dp(userid, start, dp)
-				db.insert_collision(dpid, new_dpid)
-				# exit()
-			else:  # batch up "normal" results for an executemany
-				good_results.append((userid, start, dp))
-	except (ValueError, KeyError):
-		# ValueError from bytes.fromhex() for invalid hex strings, KeyError from missing result keys
-		return aiohttp.web.json_response({"status": "invalid result data format"}, status=400)
+		num_good += 1
+
+		# check for collisions
+		collision_result = db.check_collision(dp)
+		if collision_result is not None:
+			num_collisions += 1
+			dpid, colliding_start = collision_result
+			logger.info(
+				"COLLISION FOUND! start=%s colliding_start=%s dp=%s",
+				start.hex(),
+				colliding_start.hex(),
+				dp.hex(),
+			)
+			# do dp insert now so we can grab its ID
+			new_dpid = db.insert_dp(userid, start, dp)
+			db.insert_collision(dpid, new_dpid)
+			# exit()
+		else:  # batch up "normal" results for an executemany
+			good_results.append((userid, start, dp))
 
 	# add new entries
 	db.insert_dps_batch(good_results)
