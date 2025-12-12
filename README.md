@@ -19,14 +19,23 @@ Distributed hash collision search dashboard
    pre-commit install
    ```
 
-### Database Setup
+### Creating Users
 
-To init/reset the database and start fresh:
+To create a new user with an auto-generated UUIDv4 password:
 ```bash
-python3 -m birthday_party.reset_db
+python3 -m birthday_party.create_user <username>
 ```
 
-This will delete the existing database and create a new one with test users.
+To create a user with a specific password:
+```bash
+python3 -m birthday_party.create_user <username> --password <password>
+```
+
+Example:
+```bash
+python3 -m birthday_party.create_user alice
+# Output: Generated password: 550e8400-e29b-41d4-a716-446655440000
+```
 
 ### Running the Server
 
