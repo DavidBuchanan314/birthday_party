@@ -106,6 +106,67 @@ class TestSubmitWork:
 		assert data["status"] == "bad hash length"
 
 
+class TestCollisionDetection:
+	"""Tests for collision detection logic."""
+
+	async def test_duplicate_dp_creates_collision(self, client: TestClient, test_db: BirthdayDB) -> None:
+		"""Test that submitting a duplicate distinguished point creates a collision."""
+		# First, submit a DP to establish it in the database
+		resp = await client.post(
+			"/submit_work",
+			json={
+				"username": "alice",
+				"usertoken": "alicetoken",
+				"results": [
+					{
+						"start": "deadbeefcafebabe",
+						"dp": "1111111111111111",  # This is the DP endpoint that will collide
+					}
+				],
+			},
+		)
+		assert resp.status == 200
+		
+		# Verify the DP was added
+		initial_dp_count = test_db.get_dp_count()
+		assert initial_dp_count == 1
+		
+		# Now submit another DP with the SAME endpoint but different start
+		resp = await client.post(
+			"/submit_work",
+			json={
+				"username": "bob",
+				"usertoken": "bobtoken",
+				"results": [
+					{
+						"start": "fedcba9876543210",  # Different start
+						"dp": "1111111111111111",      # Same DP endpoint - collision!
+					}
+				],
+			},
+		)
+		assert resp.status == 200
+		
+		# Verify the collision was detected and recorded
+		final_dp_count = test_db.get_dp_count()
+		assert final_dp_count == 2  # Both DPs should be in the database
+		
+		collision_count = test_db.get_collision_count()
+		assert collision_count == 1  # One collision should be recorded
+		
+		# Verify the collision details
+		collisions = test_db.get_collisions()
+		assert len(collisions) == 1
+		starta, startb, end, usera, userb, timestamp = collisions[0]
+		
+		# Check that the collision links the correct data
+		assert starta.hex() == "deadbeefcafebabe"
+		assert startb.hex() == "fedcba9876543210"
+		assert end.hex() == "1111111111111111"
+		assert usera == "alice"
+		assert userb == "bob"
+
+
 class TestIntegration:
 	"""End-to-end integration tests."""
 
