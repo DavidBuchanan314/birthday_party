@@ -29,7 +29,8 @@ class HumanBytes:
 		if is_negative:  # Faster than ternary assignment or always running abs().
 			num = abs(num)
 
-		unit = None
+		# Initialize to first label to satisfy type checkers. Loop always executes at least once.
+		unit = unit_labels[0]
 		for unit in unit_labels:
 			if num < unit_step_thresh:
 				# VERY IMPORTANT:
