@@ -7,7 +7,12 @@
 </head>
 <body>
 	<h1>Birthday Party 🥳</h1>
-	<p>A distributed search for hash collisions, leveraging the <a href="https://en.wikipedia.org/wiki/Birthday_problem">Birthday Paradox</a>, using <a href="https://www.cs.csi.cuny.edu/~zhangx/papers/P_2018_LISAT_Weber_Zhang.pdf">"Parallel Hash Collision Search by Rho Method with Distinguished Points"</a> (Brian Weber and Xiaowen Zhang, 2018).</p>
+	<p>A distributed search for hash collisions, via parallel pollard rho with distinguished points.</p>
+	<p>Recommended reading:</p>
+	<ul>
+		<li><a href="https://en.wikipedia.org/wiki/Birthday_problem">Birthday Paradox</a></li>
+		<li><a href="https://www.cs.csi.cuny.edu/~zhangx/papers/P_2018_LISAT_Weber_Zhang.pdf">"Parallel Hash Collision Search by Rho Method with Distinguished Points"</a> (Brian Weber and Xiaowen Zhang, 2018).</li>
+	</ul>
 
 	<h2>Config</h2>
 	<p><strong>Target collision length:</strong> {{ hash_length_bits }} bits</p>
@@ -17,8 +22,10 @@
 	<p><strong>Database size:</strong> {{ db_size }}</p>
 	<p><strong>Distinguished Points found:</strong> {{ dps_found_formatted }} (2<sup>{{ dps_log }}</sup>)</p>
 	<p><strong>Approx. total hashes computed:</strong> {{ approx_hashes_formatted }} (2<sup>{{ approx_hashes_log }}</sup>)</p>
-	<p><strong>Total hashes required for 50% success chance:</strong> {{ breakeven_hashes_formatted }} (2<sup>{{ breakeven_hashes_log }}</sup>) - We're {{ progress_percent }}% of the way there!</p>
-	<p><strong>Probability of having found at least one collision by now:</strong> {{ prob_success }}% (Note: this percentage will climb non-linearly!)</p>
+	<p><strong>Total hashes required for 50% success chance:</strong> {{ breakeven_hashes_formatted }} (2<sup>{{ breakeven_hashes_log }}</sup>) - We're {{ "%.2f"|format(progress_percent) }}% of the way there!</p>
+	<progress max="100" value="{{ progress_percent }}">{{ progress_percent }}%</progress>
+	<p><strong>Probability of having found at least one collision by now:</strong> {{ "%.2f"|format(success_percent) }}% (Note: this percentage will climb non-linearly!)</p>
+	<progress max="100" value="{{ success_percent }}">{{ success_percent }}%</progress>
 	<p><strong>Pre-collisions found:</strong> {{ precollisions_found }}</p>
 	<p><strong>Network hashrate (10 min avg):</strong> {{ hashrate_str }}</p>
 

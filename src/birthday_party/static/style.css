@@ -28,3 +28,7 @@ tr:first-child {
 tr:nth-child(odd) {
 	background-color: #ddd;
 }
+
+progress {
+	width: 100%;
+}

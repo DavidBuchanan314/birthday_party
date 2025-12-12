@@ -2,7 +2,7 @@ import hashlib
 # XXX: this is unoptimised, won't work for harder DP_DIFFICULTY
 
 # collision parameters (MUST BE SAME AS SERVER'S!!!)
-DP_DIFFICULTY = 8  # bits
+DP_DIFFICULTY = 16  # bits
 
 
 def HASH_FN(x):
@@ -16,8 +16,8 @@ def IS_DISTINGUISHED(x):
 
 HASH_LENGTH = len(HASH_FN(b""))  # bytes
 
-start_a = bytes.fromhex("461c25ffff06ee16")
-start_b = bytes.fromhex("08efe401b7b377d3")
+start_a = bytes.fromhex("e403ca09e4f1082e")
+start_b = bytes.fromhex("4be96cf98693b7d1")
 
 seen = [start_a]
 while not IS_DISTINGUISHED(start_a):
