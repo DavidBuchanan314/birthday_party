@@ -1,15 +1,23 @@
 from aiohttp import web
 import hashlib
-import html
 import time
 import math
 import os
+from pathlib import Path
 
+import jinja2
 from humanbytes import HumanBytes
 from database import BirthdayDB
 
 DB_PATH = "birthdayparty.db"
 db = BirthdayDB(DB_PATH)
+
+# Set up Jinja2 templates
+template_dir = Path(__file__).parent / "templates"
+jinja_env = jinja2.Environment(
+	loader=jinja2.FileSystemLoader(template_dir),
+	autoescape=jinja2.select_autoescape(['html', 'xml'])
+)
 
 # collision parameters
 DP_DIFFICULTY = 16 # bits
@@ -21,17 +29,7 @@ def IS_DISTINGUISHED(x):
 	leading_zeroes = len(x) * 8 - int.from_bytes(x, "big").bit_length()
 	return leading_zeroes >= DP_DIFFICULTY
 
-HASH_LENGTH = len(HASH_FN(b"")) # bytes
-
-
-def render_html_table(headings, rows, escape=True):
-	escapefunc = html.escape if escape else lambda x: x
-	res = "<table>"
-	res += "<tr>" + "".join(["<th>"+escapefunc(str(h))+"</th>" for h in headings]) + "</tr>"
-	for row in rows:
-		res += "<tr>" + "".join(["<td>"+escapefunc(str(r))+"</td>" for r in row]) + "</tr>"
-	res += "</table>"
-	return res
+HASH_LENGTH_BYTES = len(HASH_FN(b"")) # bytes
 
 
 def hashrate_to_string(hashrate): # hashrate in hashes per second
@@ -46,73 +44,58 @@ def hashrate_to_string(hashrate): # hashrate in hashes per second
 
 async def handle_dashboard(request):
 	start_time = time.time()
-	res = "<!DOCTYPE html><html>"
-	res += '<head><meta charset="UTF-8"><link rel="stylesheet" href="/static/style.css"></head>'
-	res += "<body>"
-	res += "<h1>Birthday Party 🥳</h1>"
-	res += '<p>A distributed search for hash collisions, leveraging the <a href="https://en.wikipedia.org/wiki/Birthday_problem">Birthday Paradox</a>, using <a href="https://www.cs.csi.cuny.edu/~zhangx/papers/P_2018_LISAT_Weber_Zhang.pdf">"Parallel Hash Collision Search by Rho Method with Distinguished Points"</a> (Brian Weber and Xiaowen Zhang, 2018).</p>'
-	res += "<h2>Config</h2>"
-	res += f"<p><strong>Target collision length:</strong> {HASH_LENGTH*8} bits</p>"
-	res += f"<p><strong>Distinguished Point difficulty:</strong> {DP_DIFFICULTY} bits</p>"
 
-	res += "<h2>Stats</h2>"
-	db_size = os.path.getsize(DB_PATH)
-	res += f"<p><strong>Database size:</strong> {HumanBytes.format(db_size)}</p>"
+	# Gather stats
+	db_size = HumanBytes.format(os.path.getsize(DB_PATH))
 	dps_found = db.get_dp_count()
-	res += f"<p><strong>Distinguished Points found:</strong> {dps_found:,} (2<sup>{math.log2(dps_found) if dps_found else float('NaN'):0.2f}</sup>)</p>"
 	approx_hashes = dps_found * 2**DP_DIFFICULTY
-	res += f"<p><strong>Approx. total hashes computed:</strong> {approx_hashes:,} (2<sup>{math.log2(approx_hashes) if approx_hashes else float('NaN'):0.2f}</sup>)</p>"
-	breakeven_hashes = round(math.sqrt((2**(HASH_LENGTH*8) * 2) * math.log(2)))
-	res += f"<p><strong>Total hashes required for 50% success chance:</strong> {breakeven_hashes:,} (2<sup>{math.log2(breakeven_hashes):0.2f}</sup>) - We're {approx_hashes/breakeven_hashes*100:0.2f}% of the way there!</p>"
-	prob_success = 1-(math.e**-(approx_hashes**2/((2**(HASH_LENGTH*8))*2)))
-	res += f"<p><strong>Probability of having found at least one collision by now:</strong> {prob_success*100:0.2f}% (Note: this percentage will climb non-linearly!)</p>"
+	breakeven_hashes = round(math.sqrt((2**(HASH_LENGTH_BYTES*8) * 2) * math.log(2)))
+	prob_success = 1-(math.e**-(approx_hashes**2/((2**(HASH_LENGTH_BYTES*8))*2)))
 	precollisions_found = db.get_collision_count()
-	res += f"<p><strong>Pre-collisions found:</strong> {precollisions_found}</p>"
 	dps_last_10mins = db.get_recent_dp_count(10)
 	hashrate = (dps_last_10mins * 2**DP_DIFFICULTY) / (10*60)
-	res += f"<p><strong>Network hashrate (10 min avg):</strong> {hashrate_to_string(hashrate)}</p>"
 
-	res += "<h2>Users</h2>"
-	userlist = []
-	for userid, username, dpcount in db.get_users_by_dpcount():
-		userlist.append((userid, username, dpcount, dpcount*(2**DP_DIFFICULTY)))
+	# Prepare user list
+	users = [
+		(userid, username, dpcount, dpcount*(2**DP_DIFFICULTY))
+		for userid, username, dpcount in db.get_users_by_dpcount()
+	]
 
-	res += render_html_table(
-		["id", "username", "dp count", "est. hash count"],
-		userlist
+	# Prepare recent DPs list
+	recent_dps = [
+		(dptime, dpstart.hex(), dpend.hex(), username)
+		for username, dpstart, dpend, dptime in db.get_recent_dps(10)
+	]
+
+	# Prepare collisions list
+	collisions = [
+		(timestamp, starta.hex(), startb.hex(), end.hex(), usera, userb)
+		for starta, startb, end, usera, userb, timestamp in db.get_collisions()
+	]
+
+	# Render template
+	template = jinja_env.get_template('dashboard.html')
+	html_content = template.render(
+		hash_length_bits=HASH_LENGTH_BYTES*8,
+		dp_difficulty=DP_DIFFICULTY,
+		db_size=db_size,
+		dps_found_formatted=f"{dps_found:,}",
+		dps_log=f"{math.log2(dps_found) if dps_found else float('NaN'):0.2f}",
+		approx_hashes_formatted=f"{approx_hashes:,}",
+		approx_hashes_log=f"{math.log2(approx_hashes) if approx_hashes else float('NaN'):0.2f}",
+		breakeven_hashes_formatted=f"{breakeven_hashes:,}",
+		breakeven_hashes_log=f"{math.log2(breakeven_hashes):0.2f}",
+		progress_percent=f"{approx_hashes/breakeven_hashes*100:0.2f}",
+		prob_success=f"{prob_success*100:0.2f}",
+		precollisions_found=precollisions_found,
+		hashrate_str=hashrate_to_string(hashrate),
+		users=users,
+		recent_dps=recent_dps,
+		collisions=collisions,
+		render_time=f"{(time.time()-start_time)*1000:0.2f}"
 	)
 
-	res += "<h2>Recent Distinguished Points</h2>"
-	dplist = []
-	for username, dpstart, dpend, dptime in db.get_recent_dps(10):
-		dplist.append((dptime, "<code>"+dpstart.hex()+"</code>", "<code>"+dpend.hex()+"</code>", html.escape(username)))
-	
-	res += render_html_table(
-		["timestamp (UTC+0)", "start hash", "end hash", "username"],
-		dplist,
-		escape=False
-	)
-
-	res += "<h2>Pre-Collisions</h2>"
-	coll = []
-	for starta, startb, end, usera, userb, timestamp in db.get_collisions():
-		coll.append((
-			timestamp,
-			"<code>"+starta.hex()+"</code>",
-			"<code>"+startb.hex()+"</code>",
-			"<code>"+end.hex()+"</code>",
-			html.escape(usera),
-			html.escape(userb),
-		))
-	res += render_html_table(
-		["timestamp (UTC+0)", "start hash A", "start hash B", "end hash", "user A", "user B"],
-		coll,
-		escape=False
-	)
-
-	res += f"<p>Page rendered in {(time.time()-start_time)*1000:0.2f}ms</p>"
-	res += "</body></html>"
-	return web.Response(text=res, content_type="text/html")
+	return web.Response(text=html_content, content_type="text/html")
 
 async def handle_submit_work(request):
 	"""
@@ -145,7 +128,7 @@ async def handle_submit_work(request):
 	for result in results:
 		start = bytes.fromhex(result["start"])
 		penultimate = bytes.fromhex(result["penultimate"])
-		if len(start) != len(penultimate) != HASH_LENGTH:
+		if len(start) != len(penultimate) != HASH_LENGTH_BYTES:
 			return web.json_response({"status": "bad hash length"}, status=400)
 		end = HASH_FN(penultimate)
 		if not IS_DISTINGUISHED(end):
