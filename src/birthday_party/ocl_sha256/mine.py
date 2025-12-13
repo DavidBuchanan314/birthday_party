@@ -1,0 +1,101 @@
+import os
+import time
+import pyopencl as cl
+import numpy as np
+from sha256 import sha256_prefix
+
+WORK_SIZE = 0x4000
+STEPS_PER_TASK = 0x100  # keep in sync with cl source
+
+
+class OCLMiner:
+	def __init__(self) -> None:
+		self.initial_h = np.array(
+			[
+				0x6A09E667,  # h0
+				0xBB67AE85,  # h1
+				0x3C6EF372,  # h2
+				0xA54FF53A,  # h3
+				0x510E527F,  # h4
+				0x9B05688C,  # h5
+				0x1F83D9AB,  # h6
+				0x5BE0CD19,  # h7
+			],
+			dtype=np.uint32,
+		)
+		self.res_flag = np.array([0], dtype=np.uint32)
+		self.res_nonce = np.array([0], dtype=np.uint64)
+
+		ctx = cl.create_some_context()
+
+		self.queue = cl.CommandQueue(ctx)
+
+		self.initial_h_buf = cl.Buffer(ctx, cl.mem_flags.READ_WRITE, size=self.initial_h.nbytes)
+		self.res_flag_buf = cl.Buffer(ctx, cl.mem_flags.READ_WRITE, size=self.res_flag.nbytes)
+		self.res_nonce_buf = cl.Buffer(ctx, cl.mem_flags.READ_WRITE, size=self.res_nonce.nbytes)
+		self.res_h_buf = cl.Buffer(ctx, cl.mem_flags.READ_WRITE, size=self.initial_h.nbytes)
+
+		# cl.enqueue_copy(self.queue, self.initial_h_buf, self.initial_h)
+		cl.enqueue_copy(self.queue, self.res_flag_buf, self.res_flag)
+		cl.enqueue_copy(self.queue, self.res_nonce_buf, self.res_nonce)
+		cl.enqueue_copy(self.queue, self.res_h_buf, self.initial_h)
+
+		srcdir = os.path.dirname(os.path.realpath(__file__))
+		prg = cl.Program(ctx, open(srcdir + "/sha256.cl").read()).build()
+		self.kernel = cl.Kernel(prg, "mine")
+
+	def mine(self, data: str, difficulty=4) -> tuple[int, str]:
+		start = time.time()
+
+		self.res_flag[0] = 0
+		initial_h = np.array(sha256_prefix(data.encode()), dtype=np.uint32)
+		cl.enqueue_copy(self.queue, self.res_flag_buf, self.res_flag)
+		cl.enqueue_copy(self.queue, self.initial_h_buf, initial_h)
+
+		mask = "f" * difficulty + "0" * 16
+		mask0 = int(mask[:8], 16)
+		mask1 = int(mask[8:16], 16)
+
+		work_size = min((16**difficulty) // STEPS_PER_TASK, WORK_SIZE)
+
+		base = 0
+		while True:
+			print("working...", hex(base))
+			self.kernel(
+				self.queue,
+				(work_size,),
+				None,
+				self.res_flag_buf,
+				self.res_nonce_buf,
+				self.res_h_buf,
+				self.initial_h_buf,
+				np.uint64(base),
+				np.uint32(len(data)),
+				np.uint32(mask0),
+				np.uint32(mask1),
+			)
+			cl.enqueue_copy(self.queue, self.res_flag, self.res_flag_buf)
+			if self.res_flag[0]:
+				break
+			base += work_size * STEPS_PER_TASK
+
+		result = np.empty_like(self.initial_h)
+		cl.enqueue_copy(self.queue, result, self.res_h_buf)
+		cl.enqueue_copy(self.queue, self.res_nonce, self.res_nonce_buf)
+
+		num_hashes = base + work_size * STEPS_PER_TASK
+		duration = time.time() - start
+		print(f"computed {num_hashes} hashes in {int(duration*1000)}ms ({int(num_hashes / duration)}H/s)")
+
+		octalized = int(f"1{int(self.res_nonce[0]):0>18o}")
+		hash_out = b"".join(int(x).to_bytes(4, "big") for x in result).hex()
+		return octalized, hash_out
+
+
+if __name__ == "__main__":
+	import time
+
+	miner = OCLMiner()
+	start = time.time()
+	print(miner.mine("A" * 64, difficulty=6))
+	print(time.time() - start)
