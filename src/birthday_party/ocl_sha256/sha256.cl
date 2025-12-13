@@ -48,16 +48,9 @@ void sha256_update(uint32_t state_out[8], const uint32_t state_in[8], uint32_t b
 	uint g = state_in[6];
 	uint h = state_in[7];
 
-	// Use block array in-place as circular buffer for w values
-	for (int i = 0; i < 64; i++) {
-		// For i >= 16, compute extended message schedule in-place
-		if (i >= 16) {
-			block[i & 15] = SIG3(block[(i - 2) & 15]) + block[(i - 7) & 15] +
-			                SIG2(block[(i - 15) & 15]) + block[(i - 16) & 15];
-		}
-
-		uint w_val = block[i & 15];
-		uint t1 = h + SIG1(e) + CH(e, f, g) + K[i] + w_val;
+	// First 16 rounds - use block directly
+	for (int i = 0; i < 16; i++) {
+		uint t1 = h + SIG1(e) + CH(e, f, g) + K[i] + block[i];
 		uint t2 = SIG0(a) + MAJ(a, b, c);
 
 		h = g;
@@ -70,7 +63,25 @@ void sha256_update(uint32_t state_out[8], const uint32_t state_in[8], uint32_t b
 		a = t1 + t2;
 	}
 
-	// Update state
+	// Remaining 48 rounds - compute extended message schedule in-place
+	for (int i = 16; i < 64; i++) {
+		block[i & 15] = SIG3(block[(i - 2) & 15]) + block[(i - 7) & 15] +
+		                SIG2(block[(i - 15) & 15]) + block[(i - 16) & 15];
+
+		uint t1 = h + SIG1(e) + CH(e, f, g) + K[i] + block[i & 15];
+		uint t2 = SIG0(a) + MAJ(a, b, c);
+
+		h = g;
+		g = f;
+		f = e;
+		e = d + t1;
+		d = c;
+		c = b;
+		b = a;
+		a = t1 + t2;
+	}
+
+	// Write final state directly
 	state_out[0] = state_in[0] + a;
 	state_out[1] = state_in[1] + b;
 	state_out[2] = state_in[2] + c;
