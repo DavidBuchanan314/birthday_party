@@ -2,6 +2,7 @@ import os
 import time
 import pyopencl as cl
 import numpy as np
+import hashlib
 from sha256 import sha256_prefix
 
 WORK_SIZE = 0x4000
@@ -89,6 +90,12 @@ class OCLMiner:
 
 		octalized = int(f"1{int(self.res_nonce[0]):0>18o}")
 		hash_out = b"".join(int(x).to_bytes(4, "big") for x in result).hex()
+
+		# sanity check:
+		actual = hashlib.sha256(f"{data}{octalized}".encode()).hexdigest()
+		assert hash_out == actual
+		assert hash_out.startswith("0" * difficulty)
+
 		return octalized, hash_out
 
 
