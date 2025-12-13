@@ -47,26 +47,19 @@ void sha256_update(uint32_t state_out[8], const uint32_t state_in[8], uint32_t b
 	uint f = state_in[5];
 	uint g = state_in[6];
 	uint h = state_in[7];
-	
-	// Sliding window for w values (we only need the last 16 values)
-	uint w_prev1 = 0, w_prev2 = 0, w_prev3 = 0, w_prev4 = 0;
-	uint w_prev5 = 0, w_prev6 = 0, w_prev7 = 0, w_prev8 = 0;
-	uint w_prev9 = 0, w_prev10 = 0, w_prev11 = 0, w_prev12 = 0;
-	uint w_prev13 = 0, w_prev14 = 0, w_prev15 = 0, w_prev16 = 0;
-	
+
+	// Use block array in-place as circular buffer for w values
 	for (int i = 0; i < 64; i++) {
-		uint w_val;
-		
-		if (i < 16) {
-			w_val = block[i];  // First 16 words come from input block
-		} else {
-			// Compute extended message schedule word using the sliding window
-			w_val = SIG3(w_prev2) + w_prev7 + SIG2(w_prev15) + w_prev16;
+		// For i >= 16, compute extended message schedule in-place
+		if (i >= 16) {
+			block[i & 15] = SIG3(block[(i - 2) & 15]) + block[(i - 7) & 15] +
+			                SIG2(block[(i - 15) & 15]) + block[(i - 16) & 15];
 		}
-		
+
+		uint w_val = block[i & 15];
 		uint t1 = h + SIG1(e) + CH(e, f, g) + K[i] + w_val;
 		uint t2 = SIG0(a) + MAJ(a, b, c);
-		
+
 		h = g;
 		g = f;
 		f = e;
@@ -75,26 +68,8 @@ void sha256_update(uint32_t state_out[8], const uint32_t state_in[8], uint32_t b
 		c = b;
 		b = a;
 		a = t1 + t2;
-		
-		// Update the sliding window (FIFO shift)
-		w_prev16 = w_prev15;
-		w_prev15 = w_prev14;
-		w_prev14 = w_prev13;
-		w_prev13 = w_prev12;
-		w_prev12 = w_prev11;
-		w_prev11 = w_prev10;
-		w_prev10 = w_prev9;
-		w_prev9 = w_prev8;
-		w_prev8 = w_prev7;
-		w_prev7 = w_prev6;
-		w_prev6 = w_prev5;
-		w_prev5 = w_prev4;
-		w_prev4 = w_prev3;
-		w_prev3 = w_prev2;
-		w_prev2 = w_prev1;
-		w_prev1 = w_val;
 	}
-	
+
 	// Update state
 	state_out[0] = state_in[0] + a;
 	state_out[1] = state_in[1] + b;
