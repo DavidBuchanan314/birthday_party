@@ -40,7 +40,7 @@ constant uint K[64] = {
 #define SIG2(x) (ROTR(x, 7) ^ ROTR(x, 18) ^ SHR(x, 3))
 #define SIG3(x) (ROTR(x, 17) ^ ROTR(x, 19) ^ SHR(x, 10))
 
-void sha256_update(uint32_t state_out[8], __constant uint32_t state_in[8], uint32_t block[16]) {
+void sha256_update(uint32_t state_out[8], uint32_t state_in[8], uint32_t block[16]) {
 	uint a = state_in[0];
 	uint b = state_in[1];
 	uint c = state_in[2];
@@ -96,56 +96,134 @@ void sha256_update(uint32_t state_out[8], __constant uint32_t state_in[8], uint3
 	state_out[7] = state_in[7] + h;
 }
 
+// Convert a single byte to two hex ASCII characters
+inline void byte_to_hex(uchar byte, uchar* hex) {
+	const uchar hex_chars[16] = {'0','1','2','3','4','5','6','7','8','9','a','b','c','d','e','f'};
+	hex[0] = hex_chars[byte >> 4];
+	hex[1] = hex_chars[byte & 0xF];
+}
+
+// Convert 32-byte hash (8 uint32s) to 64-byte ASCII hex representation
+void hash_to_hex_message(uint32_t hash[8], uint32_t msg[16]) {
+	uchar hex[64];
+
+	// Convert each uint32 to 8 hex chars (big-endian)
+	for (int i = 0; i < 8; i++) {
+		uint32_t val = hash[i];
+		byte_to_hex((val >> 24) & 0xFF, &hex[i*8 + 0]);
+		byte_to_hex((val >> 16) & 0xFF, &hex[i*8 + 2]);
+		byte_to_hex((val >> 8) & 0xFF, &hex[i*8 + 4]);
+		byte_to_hex(val & 0xFF, &hex[i*8 + 6]);
+	}
+
+	// Pack 64 hex bytes into 16 uint32s (big-endian) for SHA256 message
+	for (int i = 0; i < 16; i++) {
+		msg[i] = ((uint32_t)hex[i*4] << 24) |
+		         ((uint32_t)hex[i*4+1] << 16) |
+		         ((uint32_t)hex[i*4+2] << 8) |
+		         ((uint32_t)hex[i*4+3]);
+	}
+}
+
+// SHA-256 constants for initial state
+constant uint32_t INITIAL_H[8] = {
+	0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
+	0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19
+};
+
 __kernel void mine(
-	__global volatile uint* found_flag,
-	__global uint64_t* found_nonce,
-	__global uint32_t state_found[8],
-	__constant uint32_t state_in[8],
-	const uint64_t base,
-	const uint32_t prefixlen,
-	const uint32_t mask0,
-	const uint32_t mask1
+	__global uint32_t* current_states,    // [work_size][8] - current state for each thread
+	__global uint32_t* start_points,      // [work_size][8] - start point for each thread
+	__global uint32_t* dp_buffer,         // [max_dps][16] - pre-filled with random data, then output: (start, dp) pairs
+	__global volatile uint* dp_count,     // number of DPs found
+	const uint32_t mask0,                 // mask for first word of hash
+	const uint32_t mask1,                 // mask for second word of hash
+	const uint max_dps                    // maximum DPs to collect
 )
 {
-	uint64_t gid = get_global_id(0);
-	uint64_t gid_max = get_global_size(0);
+	uint gid = get_global_id(0);
+	uint thread_offset = gid * 8;
 
-	for (uint64_t i=base+gid; i<base+STEPS_PER_TASK*gid_max; i+=gid_max) {
-		uint32_t state_out[8], msg[16];
+	// Load current state and start point for this thread
+	uint32_t state[8];
+	uint32_t start[8];
+	for (int i = 0; i < 8; i++) {
+		state[i] = current_states[thread_offset + i];
+		start[i] = start_points[thread_offset + i];
+	}
 
-		msg[0] = 0x31303030 | (((i>>51)&7) << 16) | (((i>>48)&7) << 8) | (((i>>45)&7) << 0);
-		msg[1] = 0x30303030 | (((i>>42)&7) << 30) | (((i>>39)&7) << 16) | (((i>>36)&7) << 8) | (((i>>33)&7) << 0);
-		msg[2] = 0x30303030 | (((i>>30)&7) << 30) | (((i>>27)&7) << 16) | (((i>>24)&7) << 8) | (((i>>21)&7) << 0);
-		msg[3] = 0x30303030 | (((i>>18)&7) << 24) | (((i>>15)&7) << 16) | (((i>>12)&7) << 8) | (((i>>9)&7) << 0);
-		msg[4] = 0x30303080 | (((i>>6)&7) << 24) | (((i>>3)&7) << 16) | ((i&7) << 8);
-		msg[5] = 0;
-		msg[6] = 0;
-		msg[7] = 0;
-		msg[8] = 0;
-		msg[9] = 0;
-		msg[10] = 0;
-		msg[11] = 0;
-		msg[12] = 0;
-		msg[13] = 0;
-		msg[14] = 0;
-		msg[15] = (prefixlen+19)*8;
-		sha256_update(state_out, state_in, msg);
+	// Perform STEPS_PER_TASK iterations
+	for (uint step = 0; step < STEPS_PER_TASK; step++) {
+		// Convert state to hex ASCII message
+		uint32_t msg[16];
+		hash_to_hex_message(state, msg);
 
-		if (((state_out[0] & mask0) == 0) && ((state_out[1] & mask1) == 0)) {
-			if (atomic_cmpxchg(found_flag, 0, 1) == 0) {
-				// we found it first
+		// Compute SHA256(hex(state)) with proper padding
+		// Message is 64 bytes, so we need padding at msg[16] onwards
+		// But our sha256_update expects a single block, so we need to add padding
+		// Actually, let me use a separate function that handles the full hash
 
-				*found_nonce = i;
+		// For 64-byte message: append 0x80, then zeros, then length (64*8 = 512 bits)
+		// This fits in 2 blocks, so we need to update the approach
 
-				state_found[0] = state_out[0];
-				state_found[1] = state_out[1];
-				state_found[2] = state_out[2];
-				state_found[3] = state_out[3];
-				state_found[4] = state_out[4];
-				state_found[5] = state_out[5];
-				state_found[6] = state_out[6];
-				state_found[7] = state_out[7];
+		uint32_t state_tmp[8];
+		uint32_t msg_block[16];
+
+		// Copy initial hash state
+		uint32_t initial_h_local[8];
+		for (int i = 0; i < 8; i++) {
+			initial_h_local[i] = INITIAL_H[i];
+		}
+
+		// First block: the 64 hex bytes
+		for (int i = 0; i < 16; i++) {
+			msg_block[i] = msg[i];
+		}
+		sha256_update(state_tmp, initial_h_local, msg_block);
+
+		// Second block: padding (0x80 followed by zeros, then length)
+		msg_block[0] = 0x80000000;  // 0x80 in big-endian
+		for (int i = 1; i < 14; i++) {
+			msg_block[i] = 0;
+		}
+		msg_block[14] = 0;          // Length high word (64 bytes = 512 bits)
+		msg_block[15] = 512;        // Length low word (in bits)
+		sha256_update(state, state_tmp, msg_block);
+
+		// Check if this is a distinguished point
+		if (((state[0] & mask0) == 0) && ((state[1] & mask1) == 0)) {
+			// Found a DP! Store it if there's room
+			uint dp_idx = atomic_inc(dp_count);
+			if (dp_idx < max_dps) {
+				uint buf_offset = dp_idx * 16;
+
+				// Read new random start from dp_buffer (before overwriting)
+				uint32_t new_start[8];
+				for (int i = 0; i < 8; i++) {
+					new_start[i] = dp_buffer[buf_offset + i];
+				}
+
+				// Store start point
+				for (int i = 0; i < 8; i++) {
+					dp_buffer[buf_offset + i] = start[i];
+				}
+				// Store distinguished point
+				for (int i = 0; i < 8; i++) {
+					dp_buffer[buf_offset + 8 + i] = state[i];
+				}
+
+				// Use the random data we read as the new start
+				for (int i = 0; i < 8; i++) {
+					start[i] = new_start[i];
+					state[i] = new_start[i];
+				}
 			}
 		}
+	}
+
+	// Save current state and start point for next invocation
+	for (int i = 0; i < 8; i++) {
+		current_states[thread_offset + i] = state[i];
+		start_points[thread_offset + i] = start[i];
 	}
 }
