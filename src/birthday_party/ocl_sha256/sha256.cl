@@ -1,10 +1,9 @@
+// sha256 impl is a collab between deepseek (initial impl) and claude (perf optimizations)
+
 // STEPS_PER_TASK is passed via compile options (-DSTEPS_PER_TASK=...)
 #ifndef STEPS_PER_TASK
 #define STEPS_PER_TASK 0x100  // default fallback
 #endif
-
-// sha256 impl courtesy deepseek (yeah it got the constants right too!)
-// (had to be prompted for the w sliding-window logic)
 
 typedef uint uint32_t;
 typedef ulong uint64_t;
