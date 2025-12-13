@@ -40,7 +40,7 @@ class PollardRhoMiner:
 
 		# Build kernel
 		srcdir = os.path.dirname(os.path.realpath(__file__))
-		build_options = f"-DSTEPS_PER_TASK={self.steps_per_task}"
+		build_options = f"-DSTEPS_PER_TASK={self.steps_per_task} -DMAX_DPS_PER_CALL={MAX_DPS_PER_CALL}"
 		prg = cl.Program(ctx, open(srcdir + "/sha256.cl").read()).build(options=build_options)
 		self.kernel = cl.Kernel(prg, "mine")
 
@@ -77,7 +77,6 @@ class PollardRhoMiner:
 			self.dp_count_buf,
 			np.uint32(mask0),
 			np.uint32(mask1),
-			np.uint32(MAX_DPS_PER_CALL),
 		)
 
 		# Read back results

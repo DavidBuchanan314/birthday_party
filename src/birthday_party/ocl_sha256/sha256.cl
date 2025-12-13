@@ -1,8 +1,12 @@
 // sha256 impl is a collab between deepseek (initial impl) and claude (perf optimizations)
 
-// STEPS_PER_TASK is passed via compile options (-DSTEPS_PER_TASK=...)
+// STEPS_PER_TASK and MAX_DPS_PER_CALL are passed via compile options
 #ifndef STEPS_PER_TASK
 #define STEPS_PER_TASK 0x100  // default fallback
+#endif
+
+#ifndef MAX_DPS_PER_CALL
+#define MAX_DPS_PER_CALL 1024  // default fallback
 #endif
 
 typedef uint uint32_t;
@@ -140,11 +144,10 @@ constant uint32_t INITIAL_H[8] = {
 __kernel void mine(
 	__global uint32_t* current_states,    // [work_size][2] - current state for each thread (truncated to 8 bytes)
 	__global uint32_t* start_points,      // [work_size][2] - start point for each thread (truncated to 8 bytes)
-	__global uint32_t* dp_buffer,         // [max_dps][4] - pre-filled with random data, then output: (start, dp) pairs
+	__global uint32_t* dp_buffer,         // [MAX_DPS_PER_CALL][4] - pre-filled with random data, then output: (start, dp) pairs
 	__global volatile uint* dp_count,     // number of DPs found
 	const uint32_t mask0,                 // mask for first word of hash
-	const uint32_t mask1,                 // mask for second word of hash
-	const uint max_dps                    // maximum DPs to collect
+	const uint32_t mask1                  // mask for second word of hash
 )
 {
 	uint gid = get_global_id(0);
@@ -184,7 +187,7 @@ __kernel void mine(
 		if (((state[0] & mask0) == 0) && ((state[1] & mask1) == 0)) {
 			// Found a DP! Store it if there's room
 			uint dp_idx = atomic_inc(dp_count);
-			if (dp_idx < max_dps) {
+			if (dp_idx < MAX_DPS_PER_CALL) {
 				uint buf_offset = dp_idx * 4;
 
 				// Read new random start from dp_buffer (before overwriting)
