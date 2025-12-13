@@ -41,7 +41,7 @@ constant uint K[64] = {
 #define SIG2(x) (ROTR(x, 7) ^ ROTR(x, 18) ^ SHR(x, 3))
 #define SIG3(x) (ROTR(x, 17) ^ ROTR(x, 19) ^ SHR(x, 10))
 
-void sha256_update(uint32_t state_out[8], const uint32_t state_in[8], uint32_t block[16]) {
+void sha256_update(uint32_t state_out[8], __constant uint32_t state_in[8], uint32_t block[16]) {
 	uint a = state_in[0];
 	uint b = state_in[1];
 	uint c = state_in[2];
@@ -52,6 +52,7 @@ void sha256_update(uint32_t state_out[8], const uint32_t state_in[8], uint32_t b
 	uint h = state_in[7];
 
 	// First 16 rounds - use block directly
+	#pragma unroll
 	for (int i = 0; i < 16; i++) {
 		uint t1 = h + SIG1(e) + CH(e, f, g) + K[i] + block[i];
 		uint t2 = SIG0(a) + MAJ(a, b, c);
@@ -67,6 +68,7 @@ void sha256_update(uint32_t state_out[8], const uint32_t state_in[8], uint32_t b
 	}
 
 	// Remaining 48 rounds - compute extended message schedule in-place
+	#pragma unroll
 	for (int i = 16; i < 64; i++) {
 		block[i & 15] = SIG3(block[(i - 2) & 15]) + block[(i - 7) & 15] +
 		                SIG2(block[(i - 15) & 15]) + block[(i - 16) & 15];
@@ -99,7 +101,7 @@ __kernel void mine(
 	__global volatile uint* found_flag,
 	__global uint64_t* found_nonce,
 	__global uint32_t state_found[8],
-	__global const uint32_t state_in[8],
+	__constant uint32_t state_in[8],
 	const uint64_t base,
 	const uint32_t prefixlen,
 	const uint32_t mask0,
@@ -108,16 +110,6 @@ __kernel void mine(
 {
 	uint64_t gid = get_global_id(0);
 	uint64_t gid_max = get_global_size(0);
-
-	uint32_t state_in_copy[8];
-	state_in_copy[0] = state_in[0];
-	state_in_copy[1] = state_in[1];
-	state_in_copy[2] = state_in[2];
-	state_in_copy[3] = state_in[3];
-	state_in_copy[4] = state_in[4];
-	state_in_copy[5] = state_in[5];
-	state_in_copy[6] = state_in[6];
-	state_in_copy[7] = state_in[7];
 
 	for (uint64_t i=base+gid; i<base+STEPS_PER_TASK*gid_max; i+=gid_max) {
 		uint32_t state_out[8], msg[16];
@@ -138,7 +130,7 @@ __kernel void mine(
 		msg[13] = 0;
 		msg[14] = 0;
 		msg[15] = (prefixlen+19)*8;
-		sha256_update(state_out, state_in_copy, msg);
+		sha256_update(state_out, state_in, msg);
 
 		if (((state_out[0] & mask0) == 0) && ((state_out[1] & mask1) == 0)) {
 			if (atomic_cmpxchg(found_flag, 0, 1) == 0) {

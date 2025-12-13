@@ -33,7 +33,7 @@ class OCLMiner:
 
 		self.queue = cl.CommandQueue(ctx)
 
-		self.initial_h_buf = cl.Buffer(ctx, cl.mem_flags.READ_WRITE, size=self.initial_h.nbytes)
+		self.initial_h_buf = cl.Buffer(ctx, cl.mem_flags.READ_ONLY, size=self.initial_h.nbytes)
 		self.res_flag_buf = cl.Buffer(ctx, cl.mem_flags.READ_WRITE, size=self.res_flag.nbytes)
 		self.res_nonce_buf = cl.Buffer(ctx, cl.mem_flags.READ_WRITE, size=self.res_nonce.nbytes)
 		self.res_h_buf = cl.Buffer(ctx, cl.mem_flags.READ_WRITE, size=self.initial_h.nbytes)
