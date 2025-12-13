@@ -14,8 +14,8 @@ class PollardRhoMiner:
 		self.work_size = work_size
 		self.steps_per_task = steps_per_task
 
-		# Initialize random states for each thread
-		self.current_states = np.random.randint(0, 2**32, size=(work_size, 8), dtype=np.uint32)
+		# Initialize random states for each thread (truncated to 8 bytes = 2 uint32s)
+		self.current_states = np.random.randint(0, 2**32, size=(work_size, 2), dtype=np.uint32)
 		self.start_points = self.current_states.copy()
 
 		ctx = cl.create_some_context()
@@ -26,8 +26,8 @@ class PollardRhoMiner:
 		self.current_states_buf = cl.Buffer(ctx, cl.mem_flags.READ_WRITE, size=self.current_states.nbytes)
 		self.start_points_buf = cl.Buffer(ctx, cl.mem_flags.READ_WRITE, size=self.start_points.nbytes)
 
-		# DP buffer: pre-filled with random data, also used for output
-		self.dp_buffer = np.random.randint(0, 2**32, size=(MAX_DPS_PER_CALL, 16), dtype=np.uint32)
+		# DP buffer: pre-filled with random data, also used for output (4 uint32s = 2 for start + 2 for dp)
+		self.dp_buffer = np.random.randint(0, 2**32, size=(MAX_DPS_PER_CALL, 4), dtype=np.uint32)
 		self.dp_count = np.array([0], dtype=np.uint32)
 
 		self.dp_buffer_buf = cl.Buffer(ctx, cl.mem_flags.READ_WRITE, size=self.dp_buffer.nbytes)
@@ -91,15 +91,15 @@ class PollardRhoMiner:
 		cl.enqueue_copy(self.queue, self.current_states, self.current_states_buf)
 		cl.enqueue_copy(self.queue, self.start_points, self.start_points_buf)
 
-		# Convert DPs to bytes tuples
+		# Convert DPs to bytes tuples (8 bytes each)
 		results = []
 		for i in range(num_dps):
-			start_point = b"".join(int(x).to_bytes(4, "big") for x in self.dp_buffer[i, :8])
-			dp = b"".join(int(x).to_bytes(4, "big") for x in self.dp_buffer[i, 8:])
+			start_point = b"".join(int(x).to_bytes(4, "big") for x in self.dp_buffer[i, :2])
+			dp = b"".join(int(x).to_bytes(4, "big") for x in self.dp_buffer[i, 2:4])
 			results.append((start_point, dp))
 
 		# Refill dp_buffer with fresh random data for next iteration
-		self.dp_buffer = np.random.randint(0, 2**32, size=(MAX_DPS_PER_CALL, 16), dtype=np.uint32)
+		self.dp_buffer = np.random.randint(0, 2**32, size=(MAX_DPS_PER_CALL, 4), dtype=np.uint32)
 		cl.enqueue_copy(self.queue, self.dp_buffer_buf, self.dp_buffer)
 
 		duration = time.time() - start
@@ -113,8 +113,10 @@ if __name__ == "__main__":
 	import time
 
 	def hash_fn(x: bytes):
-		"""Hash function matching the OpenCL implementation"""
-		return hashlib.sha256(x.hex().encode()).digest()
+		"""Hash function matching the OpenCL implementation: truncated SHA256 with nibble->ASCII encoding"""
+		# Convert each nibble to ASCII by adding 'A' (same as OpenCL implementation)
+		ascii_repr = "".join(chr((b >> 4) + ord("A")) + chr((b & 0xF) + ord("A")) for b in x)
+		return hashlib.sha256(ascii_repr.encode()).digest()[:8]
 
 	def is_distinguished(x: bytes, dp_bits: int):
 		"""Check if a hash is a distinguished point"""
@@ -165,7 +167,7 @@ if __name__ == "__main__":
 					else:
 						print(f"  ✗ ERROR: Could not verify chain (gave up after {iterations} iterations)")
 
-			break  # just for testing
+				break  # just for testing
 
 	except KeyboardInterrupt:
 		elapsed = time.time() - start_time
