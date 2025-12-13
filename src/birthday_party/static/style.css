@@ -1,5 +1,5 @@
 body {
-	font-family: sans-serif;
+	font-family: system-ui, sans-serif;
 	max-width: 768px;
 	margin: auto;
 }
@@ -27,4 +27,8 @@ tr:first-child {
 
 tr:nth-child(odd) {
 	background-color: #ddd;
+}
+
+progress {
+	width: 100%;
 }

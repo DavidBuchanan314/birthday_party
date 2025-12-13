@@ -1,0 +1,37 @@
+[project]
+name = "birthday_party"
+version = "0.1.0"
+description = "A coordination server for distributed hash collision search via parallel pollard rho with distinguished points"
+requires-python = ">=3.10"
+dependencies = [
+    "aiohttp",
+    "jinja2",
+    "requests",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff",
+    "pre-commit",
+    "pytest",
+    "pytest-aiohttp",
+]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.format]
+indent-style = "tab"
+quote-style = "double"
+line-ending = "auto"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
