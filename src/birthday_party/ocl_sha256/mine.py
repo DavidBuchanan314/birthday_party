@@ -81,7 +81,10 @@ class PollardRhoMiner:
 
 		# Read back results
 		cl.enqueue_copy(self.queue, self.dp_count, self.dp_count_buf)
-		num_dps = min(self.dp_count[0], MAX_DPS_PER_CALL)
+		num_dps = self.dp_count[0]
+		if num_dps > MAX_DPS_PER_CALL:
+			print("WARNING: MAX_DPS_PER_CALL exceeded! You should probably increase dp_bits.")
+			num_dps = MAX_DPS_PER_CALL
 
 		if num_dps > 0:
 			cl.enqueue_copy(self.queue, self.dp_buffer, self.dp_buffer_buf)
