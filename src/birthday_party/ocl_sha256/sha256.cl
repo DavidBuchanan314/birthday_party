@@ -107,19 +107,17 @@ __kernel void mine(
 	uint64_t gid_max = get_global_size(0);
 
 	uint32_t state_in_copy[8];
+	state_in_copy[0] = state_in[0];
+	state_in_copy[1] = state_in[1];
+	state_in_copy[2] = state_in[2];
+	state_in_copy[3] = state_in[3];
+	state_in_copy[4] = state_in[4];
+	state_in_copy[5] = state_in[5];
+	state_in_copy[6] = state_in[6];
+	state_in_copy[7] = state_in[7];
 
 	for (uint64_t i=base+gid; i<base+STEPS_PER_TASK*gid_max; i+=gid_max) {
 		uint32_t state_out[8], msg[16];
-
-		// TODO: figure out how to avoid this copy
-		state_in_copy[0] = state_in[0];
-		state_in_copy[1] = state_in[1];
-		state_in_copy[2] = state_in[2];
-		state_in_copy[3] = state_in[3];
-		state_in_copy[4] = state_in[4];
-		state_in_copy[5] = state_in[5];
-		state_in_copy[6] = state_in[6];
-		state_in_copy[7] = state_in[7];
 
 		msg[0] = 0x31303030 | (((i>>51)&7) << 16) | (((i>>48)&7) << 8) | (((i>>45)&7) << 0);
 		msg[1] = 0x30303030 | (((i>>42)&7) << 30) | (((i>>39)&7) << 16) | (((i>>36)&7) << 8) | (((i>>33)&7) << 0);
