@@ -6,7 +6,7 @@ Tests different parameter combinations to find optimal performance.
 
 import json
 from typing import Dict, List, Optional
-from mine import OCLMiner
+from mine import PollardRhoMiner
 
 
 class ParamOptimizer:
@@ -18,27 +18,37 @@ class ParamOptimizer:
 		self,
 		work_size: int,
 		steps_per_task: int,
-		difficulty: int = 5,
-		test_string: str = "A" * 64,
+		dp_bits: int = 16,
+		num_iterations: int = 10,
 	) -> Dict:
 		"""Run a single benchmark with given parameters."""
 		print(f"\nTesting WORK_SIZE={hex(work_size)}, STEPS_PER_TASK={hex(steps_per_task)}")
 
 		try:
 			# Create miner with specific parameters
-			miner = OCLMiner(work_size=work_size, steps_per_task=steps_per_task)
+			miner = PollardRhoMiner(work_size=work_size, steps_per_task=steps_per_task)
 
-			# Run benchmark
-			nonce, hash_val, rate = miner.mine(test_string, difficulty=difficulty)
+			# Run multiple iterations to get average performance
+			total_rate = 0.0
+			total_dps = 0
+			for _ in range(num_iterations):
+				results, rate = miner.mine(dp_bits=dp_bits)
+				total_rate += rate
+				total_dps += len(results)
+
+			avg_rate = total_rate / num_iterations
+			avg_dps = total_dps / num_iterations
 
 			result = {
 				"work_size": work_size,
 				"steps_per_task": steps_per_task,
-				"hash_rate": rate,
-				"nonce": nonce,
-				"hash": hash_val,
+				"hash_rate": avg_rate,
+				"avg_dps_per_call": avg_dps,
+				"total_iterations": num_iterations,
 				"success": True,
 			}
+
+			print(f"  → {avg_rate:,.0f} H/s, {avg_dps:.1f} DPs/call")
 
 			return result
 
@@ -55,7 +65,8 @@ class ParamOptimizer:
 		self,
 		work_sizes: Optional[List[int]] = None,
 		steps_per_task_values: Optional[List[int]] = None,
-		difficulty: int = 5,
+		dp_bits: int = 16,
+		num_iterations: int = 10,
 		output_file: str = "optimization_results.json",
 	) -> tuple[List[Dict], Optional[Dict]]:
 		"""Run optimization across parameter space."""
@@ -86,7 +97,8 @@ class ParamOptimizer:
 
 		total_configs = len(work_sizes) * len(steps_per_task_values)
 		print(f"Starting optimization with {total_configs} configurations")
-		print(f"Difficulty: {difficulty}")
+		print(f"DP bits: {dp_bits}")
+		print(f"Iterations per config: {num_iterations}")
 		print(f"WORK_SIZE values: {[hex(x) for x in work_sizes]}")
 		print(f"STEPS_PER_TASK values: {[hex(x) for x in steps_per_task_values]}")
 
@@ -96,7 +108,7 @@ class ParamOptimizer:
 				config_num += 1
 				print(f"\n[{config_num}/{total_configs}]", end=" ")
 
-				result = self.run_benchmark(work_size, steps_per_task, difficulty)
+				result = self.run_benchmark(work_size, steps_per_task, dp_bits, num_iterations)
 				self.results.append(result)
 
 				if result["success"]:
@@ -158,10 +170,16 @@ def main():
 
 	parser = argparse.ArgumentParser(description="Optimize WORK_SIZE and STEPS_PER_TASK parameters")
 	parser.add_argument(
-		"--difficulty",
+		"--dp-bits",
 		type=int,
-		default=5,
-		help="Mining difficulty for benchmarks (default: 5)",
+		default=24,
+		help="Distinguished point difficulty in bits (default: 16)",
+	)
+	parser.add_argument(
+		"--iterations",
+		type=int,
+		default=10,
+		help="Number of iterations per configuration (default: 10)",
 	)
 	parser.add_argument(
 		"--output",
@@ -183,11 +201,16 @@ def main():
 		optimizer.optimize(
 			work_sizes=work_sizes,
 			steps_per_task_values=steps_per_task_values,
-			difficulty=args.difficulty,
+			dp_bits=args.dp_bits,
+			num_iterations=args.iterations,
 			output_file=args.output,
 		)
 	else:
-		optimizer.optimize(difficulty=args.difficulty, output_file=args.output)
+		optimizer.optimize(
+			dp_bits=args.dp_bits,
+			num_iterations=args.iterations,
+			output_file=args.output,
+		)
 
 
 if __name__ == "__main__":

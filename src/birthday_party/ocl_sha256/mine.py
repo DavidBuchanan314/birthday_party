@@ -5,7 +5,7 @@ import numpy as np
 import hashlib
 
 WORK_SIZE = 0x4000
-STEPS_PER_TASK = 0x100
+STEPS_PER_TASK = 0x400
 MAX_DPS_PER_CALL = 1024  # Maximum DPs to collect per mine() call
 
 
@@ -132,7 +132,8 @@ if __name__ == "__main__":
 
 	try:
 		while True:
-			results, _ = miner.mine(dp_bits=dp_bits)
+			results, rate = miner.mine(dp_bits=dp_bits)
+			print(f"rate: {int(rate):,}H/s")
 			total_hashes += miner.work_size * miner.steps_per_task
 
 			if results:
@@ -142,7 +143,7 @@ if __name__ == "__main__":
 					f"Found {len(results)} DPs! Total: {total_dps} DPs in {elapsed:.1f}s ({total_hashes/elapsed:,.0f} H/s, {total_dps/elapsed:.2f} DP/s)"
 				)
 
-				if 0:
+				if 1:
 					# Verify first DP
 					start_point, dp = results[0]
 					print(f"  Start: {start_point.hex()}")
@@ -163,6 +164,8 @@ if __name__ == "__main__":
 							print(f"  ✗ ERROR: DP does not have {dp_bits} leading zero bits!")
 					else:
 						print(f"  ✗ ERROR: Could not verify chain (gave up after {iterations} iterations)")
+
+			break  # just for testing
 
 	except KeyboardInterrupt:
 		elapsed = time.time() - start_time
