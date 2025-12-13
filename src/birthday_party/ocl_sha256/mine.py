@@ -6,11 +6,13 @@ import hashlib
 from sha256 import sha256_prefix
 
 WORK_SIZE = 0x4000
-STEPS_PER_TASK = 0x100  # keep in sync with cl source
+STEPS_PER_TASK = 0x100
 
 
 class OCLMiner:
-	def __init__(self) -> None:
+	def __init__(self, work_size: int = WORK_SIZE, steps_per_task: int = STEPS_PER_TASK) -> None:
+		self.work_size = work_size
+		self.steps_per_task = steps_per_task
 		self.initial_h = np.array(
 			[
 				0x6A09E667,  # h0
@@ -42,7 +44,8 @@ class OCLMiner:
 		cl.enqueue_copy(self.queue, self.res_h_buf, self.initial_h)
 
 		srcdir = os.path.dirname(os.path.realpath(__file__))
-		prg = cl.Program(ctx, open(srcdir + "/sha256.cl").read()).build()
+		build_options = f"-DSTEPS_PER_TASK={self.steps_per_task}"
+		prg = cl.Program(ctx, open(srcdir + "/sha256.cl").read()).build(options=build_options)
 		self.kernel = cl.Kernel(prg, "mine")
 
 	def mine(self, data: str, difficulty=4) -> tuple[int, str]:
@@ -57,7 +60,7 @@ class OCLMiner:
 		mask0 = int(mask[:8], 16)
 		mask1 = int(mask[8:16], 16)
 
-		work_size = min((16**difficulty) // STEPS_PER_TASK, WORK_SIZE)
+		work_size = min((16**difficulty) // self.steps_per_task, self.work_size)
 
 		base = 0
 		while True:
@@ -78,13 +81,13 @@ class OCLMiner:
 			cl.enqueue_copy(self.queue, self.res_flag, self.res_flag_buf)
 			if self.res_flag[0]:
 				break
-			base += work_size * STEPS_PER_TASK
+			base += work_size * self.steps_per_task
 
 		result = np.empty_like(self.initial_h)
 		cl.enqueue_copy(self.queue, result, self.res_h_buf)
 		cl.enqueue_copy(self.queue, self.res_nonce, self.res_nonce_buf)
 
-		num_hashes = base + work_size * STEPS_PER_TASK
+		num_hashes = base + work_size * self.steps_per_task
 		duration = time.time() - start
 		print(f"computed {num_hashes} hashes in {int(duration*1000)}ms ({int(num_hashes / duration)}H/s)")
 

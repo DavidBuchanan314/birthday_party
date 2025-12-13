@@ -1,4 +1,7 @@
-#define STEPS_PER_TASK 0x100
+// STEPS_PER_TASK is passed via compile options (-DSTEPS_PER_TASK=...)
+#ifndef STEPS_PER_TASK
+#define STEPS_PER_TASK 0x100  // default fallback
+#endif
 
 // sha256 impl courtesy deepseek (yeah it got the constants right too!)
 // (had to be prompted for the w sliding-window logic)
