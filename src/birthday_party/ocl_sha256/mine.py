@@ -48,7 +48,7 @@ class OCLMiner:
 		prg = cl.Program(ctx, open(srcdir + "/sha256.cl").read()).build(options=build_options)
 		self.kernel = cl.Kernel(prg, "mine")
 
-	def mine(self, data: str, difficulty=4) -> tuple[int, str]:
+	def mine(self, data: str, difficulty=4) -> tuple[int, str, float]:
 		start = time.time()
 
 		self.res_flag[0] = 0
@@ -89,7 +89,8 @@ class OCLMiner:
 
 		num_hashes = base + work_size * self.steps_per_task
 		duration = time.time() - start
-		print(f"computed {num_hashes} hashes in {int(duration*1000)}ms ({int(num_hashes / duration)}H/s)")
+		rate = num_hashes / duration
+		print(f"computed {num_hashes} hashes in {int(duration*1000)}ms ({int(rate):,}H/s)")
 
 		octalized = int(f"1{int(self.res_nonce[0]):0>18o}")
 		hash_out = b"".join(int(x).to_bytes(4, "big") for x in result).hex()
@@ -99,7 +100,7 @@ class OCLMiner:
 		assert hash_out == actual
 		assert hash_out.startswith("0" * difficulty)
 
-		return octalized, hash_out
+		return octalized, hash_out, rate
 
 
 if __name__ == "__main__":

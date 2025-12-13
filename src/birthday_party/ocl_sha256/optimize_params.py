@@ -5,7 +5,6 @@ Tests different parameter combinations to find optimal performance.
 """
 
 import json
-import time
 from typing import Dict, List, Optional
 from mine import OCLMiner
 
@@ -30,25 +29,17 @@ class ParamOptimizer:
 			miner = OCLMiner(work_size=work_size, steps_per_task=steps_per_task)
 
 			# Run benchmark
-			start = time.time()
-			nonce, hash_val = miner.mine(test_string, difficulty=difficulty)
-			duration = time.time() - start
-
-			# Calculate hash rate (approximate based on difficulty)
-			approx_hashes = 16**difficulty
-			hash_rate = int(approx_hashes / duration)
+			nonce, hash_val, rate = miner.mine(test_string, difficulty=difficulty)
 
 			result = {
 				"work_size": work_size,
 				"steps_per_task": steps_per_task,
-				"hash_rate": hash_rate,
-				"duration": duration,
+				"hash_rate": rate,
 				"nonce": nonce,
 				"hash": hash_val,
 				"success": True,
 			}
 
-			print(f"  → {hash_rate:,} H/s ({duration:.2f}s)")
 			return result
 
 		except Exception as e:
@@ -139,7 +130,6 @@ class ParamOptimizer:
 			print(f"  WORK_SIZE = {hex(self.best_result['work_size'])}")
 			print(f"  STEPS_PER_TASK = {hex(self.best_result['steps_per_task'])}")
 			print(f"  Hash rate: {self.best_result['hash_rate']:,} H/s")
-			print(f"  Duration: {self.best_result['duration']:.2f}s")
 
 			print("\nTo apply these settings, update mine.py:")
 			print(f"  WORK_SIZE = {hex(self.best_result['work_size'])}  " f"(currently: defaults)")
