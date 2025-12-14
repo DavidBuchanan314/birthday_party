@@ -47,11 +47,17 @@ def main():
 		"--hash-bytes",
 		type=int,
 		default=8,
-		help="Number of prefix bytes from SHA256 hash (1-32, default: 8 for backward compatibility)",
+		help="Number of prefix bytes from SHA256 hash (0-32, default: 8 for backward compatibility)",
+	)
+	parser.add_argument(
+		"--hash-suffix-bytes",
+		type=int,
+		default=0,
+		help="Number of suffix bytes from SHA256 hash (0-32, default: 0). If specified, middle bytes are skipped.",
 	)
 	args = parser.parse_args()
 
-	hash_config = HashConfig(prefix_bytes=args.hash_bytes)
+	hash_config = HashConfig(prefix_bytes=args.hash_bytes, suffix_bytes=args.hash_suffix_bytes)
 	start_a = bytes.fromhex(args.start_a)
 	start_b = bytes.fromhex(args.start_b)
 

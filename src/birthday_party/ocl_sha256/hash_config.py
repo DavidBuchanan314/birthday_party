@@ -2,21 +2,31 @@
 
 
 class HashConfig:
-	"""Configuration for hash truncation scheme (prefix-only for now)."""
+	"""Configuration for hash truncation scheme with prefix and optional suffix support."""
 
-	def __init__(self, prefix_bytes: int):
+	def __init__(self, prefix_bytes: int, suffix_bytes: int = 0):
 		"""
 		Initialize hash configuration.
 
 		Args:
-			prefix_bytes: Number of bytes to take from the start of SHA256 hash (1-32)
+			prefix_bytes: Number of bytes to take from the start of SHA256 hash (0-32)
+			suffix_bytes: Number of bytes to take from the end of SHA256 hash (0-32)
+				If both are specified, the middle bytes are skipped.
 		"""
 		self.prefix_bytes = prefix_bytes
-		self.suffix_bytes = 0  # Reserved for future prefix+suffix support
+		self.suffix_bytes = suffix_bytes
 
 		# Validation
-		if not (1 <= prefix_bytes <= 32):
-			raise ValueError(f"prefix_bytes must be 1-32, got {prefix_bytes}")
+		if not (0 <= prefix_bytes <= 32):
+			raise ValueError(f"prefix_bytes must be 0-32, got {prefix_bytes}")
+		if not (0 <= suffix_bytes <= 32):
+			raise ValueError(f"suffix_bytes must be 0-32, got {suffix_bytes}")
+		if prefix_bytes + suffix_bytes < 1:
+			raise ValueError("Must have at least 1 byte total (prefix + suffix)")
+		if prefix_bytes + suffix_bytes > 32:
+			raise ValueError(f"Total bytes ({prefix_bytes} + {suffix_bytes}) cannot exceed 32")
+		if suffix_bytes > 0 and prefix_bytes + suffix_bytes >= 32:
+			raise ValueError("When using suffix, prefix + suffix must be < 32 (must skip at least 1 byte)")
 
 	@property
 	def total_bytes(self) -> int:
@@ -36,25 +46,32 @@ class HashConfig:
 			full_hash: Full 32-byte SHA256 hash
 
 		Returns:
-			Truncated hash (prefix_bytes long)
+			Truncated hash (prefix_bytes + suffix_bytes long)
 		"""
 		if len(full_hash) != 32:
 			raise ValueError(f"Expected 32-byte hash, got {len(full_hash)} bytes")
 
-		# Prefix-only for now
-		return full_hash[: self.prefix_bytes]
+		if self.suffix_bytes == 0:
+			# Prefix-only (simple case)
+			return full_hash[: self.prefix_bytes]
+		else:
+			# Prefix + suffix (skip middle)
+			return full_hash[: self.prefix_bytes] + full_hash[-self.suffix_bytes :]
 
 	def get_opencl_defines(self) -> str:
 		"""Generate OpenCL compiler flags for this config."""
-		return f"-DHASH_PREFIX_BYTES={self.prefix_bytes}"
+		return f"-DHASH_PREFIX_BYTES={self.prefix_bytes} -DHASH_SUFFIX_BYTES={self.suffix_bytes}"
 
 	def __repr__(self):
-		return f"HashConfig(prefix={self.prefix_bytes}B)"
+		if self.suffix_bytes == 0:
+			return f"HashConfig(prefix={self.prefix_bytes}B)"
+		else:
+			return f"HashConfig(prefix={self.prefix_bytes}B, suffix={self.suffix_bytes}B)"
 
 	def __eq__(self, other):
 		if not isinstance(other, HashConfig):
 			return False
-		return self.prefix_bytes == other.prefix_bytes
+		return self.prefix_bytes == other.prefix_bytes and self.suffix_bytes == other.suffix_bytes
 
 
 # Default configuration (backward compatible with original 8-byte truncation)

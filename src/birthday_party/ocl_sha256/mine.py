@@ -309,7 +309,13 @@ def main():
 		"--hash-bytes",
 		type=int,
 		default=8,
-		help="Number of prefix bytes from SHA256 hash (1-32, default: 8 for backward compatibility)",
+		help="Number of prefix bytes from SHA256 hash (0-32, default: 8 for backward compatibility)",
+	)
+	parser.add_argument(
+		"--hash-suffix-bytes",
+		type=int,
+		default=0,
+		help="Number of suffix bytes from SHA256 hash (0-32, default: 0). If specified, middle bytes are skipped.",
 	)
 	args = parser.parse_args()
 
@@ -317,7 +323,7 @@ def main():
 	if not args.dry_run and (not args.username or not args.usertoken):
 		parser.error("username and usertoken are required unless --dry-run is specified")
 
-	hash_config = HashConfig(prefix_bytes=args.hash_bytes)
+	hash_config = HashConfig(prefix_bytes=args.hash_bytes, suffix_bytes=args.hash_suffix_bytes)
 	mine(args.server, args.username, args.usertoken, args.dp_bits, dry_run=args.dry_run, hash_config=hash_config)
 
 

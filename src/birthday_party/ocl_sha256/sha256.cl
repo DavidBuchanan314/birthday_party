@@ -13,9 +13,14 @@
 #define HASH_PREFIX_BYTES 8  // default: 8-byte prefix
 #endif
 
+#ifndef HASH_SUFFIX_BYTES
+#define HASH_SUFFIX_BYTES 0  // default: no suffix
+#endif
+
 // Derived constants for hash truncation
-#define HASH_NUM_UINT32S ((HASH_PREFIX_BYTES + 3) / 4)  // round up to whole words
-#define HASH_ASCII_BYTES (HASH_PREFIX_BYTES * 2)  // each byte becomes 2 ASCII chars
+#define HASH_TOTAL_BYTES (HASH_PREFIX_BYTES + HASH_SUFFIX_BYTES)
+#define HASH_NUM_UINT32S ((HASH_TOTAL_BYTES + 3) / 4)  // round up to whole words
+#define HASH_ASCII_BYTES (HASH_TOTAL_BYTES * 2)  // each byte becomes 2 ASCII chars
 
 typedef uchar uint8_t;
 typedef uint uint32_t;
@@ -109,8 +114,64 @@ void sha256_update(uint32_t state_out[8], uint32_t state_in[8], uint32_t block[1
 	state_out[7] = state_in[7] + h;
 }
 
+// Extract truncated hash (prefix + suffix) from full SHA256
+void truncate_hash(uint32_t hash_full[8], uint32_t hash_trunc[HASH_NUM_UINT32S]) {
+	if (HASH_SUFFIX_BYTES == 0) {
+		// Prefix-only (simple case) - just copy first HASH_NUM_UINT32S words
+		for (int i = 0; i < HASH_NUM_UINT32S; i++) {
+			hash_trunc[i] = hash_full[i];
+		}
+	} else {
+		// Prefix + suffix - need to extract non-contiguous bytes
+		// We'll pack them into uint32s, handling partial words carefully
+
+		int trunc_idx = 0;
+		uint32_t accum = 0;
+		int accum_bytes = 0;
+
+		// Extract prefix bytes
+		for (int byte_offset = 0; byte_offset < HASH_PREFIX_BYTES; byte_offset++) {
+			int word_idx = byte_offset / 4;
+			int byte_in_word = byte_offset % 4;
+			uint8_t byte_val = (hash_full[word_idx] >> (24 - byte_in_word * 8)) & 0xFF;
+
+			accum = (accum << 8) | byte_val;
+			accum_bytes++;
+
+			if (accum_bytes == 4) {
+				hash_trunc[trunc_idx++] = accum;
+				accum = 0;
+				accum_bytes = 0;
+			}
+		}
+
+		// Extract suffix bytes
+		for (int byte_offset = 0; byte_offset < HASH_SUFFIX_BYTES; byte_offset++) {
+			int abs_byte_offset = 32 - HASH_SUFFIX_BYTES + byte_offset;
+			int word_idx = abs_byte_offset / 4;
+			int byte_in_word = abs_byte_offset % 4;
+			uint8_t byte_val = (hash_full[word_idx] >> (24 - byte_in_word * 8)) & 0xFF;
+
+			accum = (accum << 8) | byte_val;
+			accum_bytes++;
+
+			if (accum_bytes == 4) {
+				hash_trunc[trunc_idx++] = accum;
+				accum = 0;
+				accum_bytes = 0;
+			}
+		}
+
+		// Flush any remaining bytes
+		if (accum_bytes > 0) {
+			accum <<= (4 - accum_bytes) * 8;  // Left-align remaining bytes
+			hash_trunc[trunc_idx++] = accum;
+		}
+	}
+}
+
 // Convert truncated hash to ASCII representation with SHA256 padding
-// Generic version that works for any HASH_PREFIX_BYTES (1-32)
+// Generic version that works for any HASH_TOTAL_BYTES (1-32)
 void hash_to_ascii_message(uint32_t hash[HASH_NUM_UINT32S], uint32_t msg[16]) {
 	// Convert each nibble to ASCII by adding 'A' (0x41)
 	// Each byte becomes 2 ASCII characters (high nibble, low nibble)
@@ -120,7 +181,7 @@ void hash_to_ascii_message(uint32_t hash[HASH_NUM_UINT32S], uint32_t msg[16]) {
 
 	// Process complete 4-byte words
 	// Each 4-byte word produces 8 ASCII bytes (2 output words)
-	const int complete_words = HASH_PREFIX_BYTES / 4;
+	const int complete_words = HASH_TOTAL_BYTES / 4;
 
 	#pragma unroll
 	for (int i = 0; i < complete_words; i++) {
@@ -140,7 +201,7 @@ void hash_to_ascii_message(uint32_t hash[HASH_NUM_UINT32S], uint32_t msg[16]) {
 	}
 
 	// Handle partial word (1, 2, or 3 remaining bytes)
-	const int remainder_bytes = HASH_PREFIX_BYTES % 4;
+	const int remainder_bytes = HASH_TOTAL_BYTES % 4;
 	if (remainder_bytes > 0) {
 		uint32_t val = hash[complete_words];
 
@@ -249,10 +310,8 @@ __kernel void mine(
 		// Compute full SHA256
 		sha256_update(hash_full, initial_h_local, msg);
 
-		// Truncate to prefix bytes
-		for (int i = 0; i < HASH_NUM_UINT32S; i++) {
-			state[i] = hash_full[i];
-		}
+		// Truncate to prefix + suffix bytes
+		truncate_hash(hash_full, state);
 
 		// Check if this is a distinguished point
 		if (((state[0] & mask0) == 0) && ((state[1] & mask1) == 0)) {
