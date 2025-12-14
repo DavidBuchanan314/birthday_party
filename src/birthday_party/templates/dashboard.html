@@ -21,7 +21,7 @@
 	<h2>Stats</h2>
 	<p><strong>Database size:</strong> {{ db_size }}</p>
 	<p><strong>Distinguished Points found:</strong> {{ dps_found_formatted }} (2<sup>{{ dps_log }}</sup>)</p>
-	<p><strong>Approx. total hashes computed:</strong> {{ approx_hashes_formatted }} (2<sup>{{ approx_hashes_log }}</sup>)</p>
+	<p><strong>Total hashes computed:</strong> {{ approx_hashes_formatted }} (2<sup>{{ approx_hashes_log }}</sup>) (approx.)</p>
 	<p><strong>Total hashes required for 50% success chance:</strong> {{ breakeven_hashes_formatted }} (2<sup>{{ breakeven_hashes_log }}</sup>) - We're {{ "%.2f"|format(progress_percent) }}% of the way there!</p>
 	<progress max="100" value="{{ progress_percent }}">{{ progress_percent }}%</progress>
 	<p><strong>Time until 50% success:</strong> {{breakeven_eta}}</p>
@@ -29,7 +29,7 @@
 	<progress max="100" value="{{ success_percent }}">{{ success_percent }}%</progress>
 	<p><strong>Expected number of collisions found:</strong> TODO</p>
 	<p><strong>Pre-collisions found:</strong> {{ precollisions_found }}</p>
-	<p><strong>Network hashrate (10 min avg):</strong> {{ hashrate_str }}</p>
+	<p><strong>Network hashrate (60s avg):</strong> {{ hashrate_str }}</p>
 
 	<h2>Users</h2>
 	<table>

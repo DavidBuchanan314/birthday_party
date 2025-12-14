@@ -1,5 +1,6 @@
 import sqlite3
 import hmac
+import time
 from typing import Optional, List, Tuple
 
 DB_PATH = "birthdayparty.db"
@@ -55,11 +56,10 @@ class BirthdayDB:
 		"""Get total number of pre-collisions found."""
 		return self.cur.execute("SELECT COUNT(*) FROM collision").fetchone()[0]
 
-	def get_recent_dp_count(self, minutes: int = 10) -> int:
-		"""Get number of DPs found in the last N minutes."""
-		return self.cur.execute(
-			"SELECT COUNT(*) FROM dp WHERE dptime > UNIXEPOCH('now', ?)", (f"-{minutes} minutes",)
-		).fetchone()[0]
+	def get_recent_dp_count(self, seconds: int = 600) -> int:
+		"""Get number of DPs found in the last N seconds."""
+		cutoff = time.time() - seconds
+		return self.cur.execute("SELECT COUNT(*) FROM dp WHERE dptime > ?", (cutoff,)).fetchone()[0]
 
 	def get_users_by_dpcount(self) -> List[Tuple[int, str, int]]:
 		"""Get all users ordered by their DP count (descending).
@@ -146,8 +146,8 @@ class BirthdayDB:
 			The dpid of the inserted row
 		"""
 		self.cur.execute(
-			"INSERT INTO dp (dpuserid, dpstart, dpend, dptime) VALUES (?, ?, ?, UNIXEPOCH('now'))",
-			(userid, dpstart, dpend),
+			"INSERT INTO dp (dpuserid, dpstart, dpend, dptime) VALUES (?, ?, ?, ?)",
+			(userid, dpstart, dpend, time.time()),
 		)
 		dpid = self.cur.lastrowid
 		if dpid is None:
@@ -171,9 +171,9 @@ class BirthdayDB:
 		Args:
 			dps: List of (userid, dpstart, dpend) tuples
 		"""
-		self.cur.executemany(
-			"INSERT INTO dp (dpuserid, dpstart, dpend, dptime) VALUES (?, ?, ?, UNIXEPOCH('now'))", dps
-		)
+		current_time = time.time()
+		dps_with_time = [(userid, dpstart, dpend, current_time) for userid, dpstart, dpend in dps]
+		self.cur.executemany("INSERT INTO dp (dpuserid, dpstart, dpend, dptime) VALUES (?, ?, ?, ?)", dps_with_time)
 		self.con.commit()
 
 	def increment_user_dpcount(self, userid: int, count: int):

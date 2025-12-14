@@ -10,7 +10,7 @@ import queue
 
 from .hash_config import HashConfig, DEFAULT_CONFIG
 
-WORK_SIZE = 0x4000
+WORK_SIZE = 0x400
 STEPS_PER_TASK = 0x400
 MAX_DPS_PER_CALL = 1024  # Maximum DPs to collect per mine() call
 

@@ -32,7 +32,7 @@ python3 -m pip install -e .
 python3 -m birthday_party.create_user <username>
 
 # start the server itself (see --help for args)
-python3 -m birthday_party.server
+python3 -m birthday_party.server --hash-length 56
 ```
 
 The server listens on `http://localhost:8080` by default.
@@ -42,8 +42,10 @@ The server listens on `http://localhost:8080` by default.
 This repo has two client implementations. You can run many client instances at once, but all clients must be running under the same configuration (same hash, same length, etc. - also matching the server's configuration)
 
 ```bash
-python3 -m birthday_party.ocl_sha256.mine <username> <usertoken>
+python3 -m birthday_party.ocl_sha256.mine <username> <usertoken> --hash-prefix-bytes 7
 ```
+
+(This produces a 7-byte truncated hash, which is cheap to compute for testing and corresponds to the 56 bits configured on the server side (sorry they're different units...))
 
 If you're planning on doing a lot of computation (many colliding bits), you might want to tune the parameters first. See `birthday_party.ocl_sha256.optimize_params` to help discover ideal parameters for your hardware.
 
@@ -54,7 +56,15 @@ See also `birthday_party.cpu_md5.mine` (if you want to look at the code, this is
 The server does not find collisions directly, it finds what I call "pre-collisions" - two start points that meet in the same distinguished point. Some extra computation is required to discover the actual collision point, which is performed by a finalization script:
 
 ```bash
-python3 -m birthday_party.ocl_sha256.finalize
+$ python3 -m birthday_party.ocl_sha256.finalize b72d807d21dfc8 77dc0953e57ec4 --hash-prefix-bytes 7
+Distinguished point: 0000003eae92d4
+Collision: DLNNDDMHHKJCGG KPKEHIBLLIPBNE -> ff74163820da38
+
+$ echo -n DLNNDDMHHKJCGG | sha256sum 
+ff74163820da381f13669510b09a1481b42ce20f613f8ce737207ec4cd6f7c14  -
+
+$ echo -n KPKEHIBLLIPBNE | sha256sum 
+ff74163820da3881016f01b3c4fb2e36e52747393d096dafb0cd86e4354e72b2  -
 ```
 
 ## Development

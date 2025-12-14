@@ -14,6 +14,9 @@ from birthday_party.database import BirthdayDB
 
 logger = logging.getLogger(__name__)
 
+# Configuration
+HASHRATE_WINDOW_SECONDS = 60  # Time window for computing average hashrate
+
 # Type-safe app keys
 db_key = aiohttp.web.AppKey("db", BirthdayDB)
 jinja_key = aiohttp.web.AppKey("jinja_env", jinja2.Environment)
@@ -41,14 +44,18 @@ async def handle_dashboard(request: aiohttp.web.Request) -> aiohttp.web.Response
 	# Gather stats
 	db_size = HumanBytes.format(os.path.getsize(db.path))
 	dps_found = db.get_dp_count()
-	dps_last_10mins = db.get_recent_dp_count(10)
-	hashrate = (dps_last_10mins * 2**dp_difficulty) / (10 * 60)
+	dps_recent = db.get_recent_dp_count(HASHRATE_WINDOW_SECONDS)
+	hashrate = (dps_recent * 2**dp_difficulty) / HASHRATE_WINDOW_SECONDS
 	approx_hashes = dps_found * 2**dp_difficulty
 	breakeven_hashes = round(math.sqrt((2**hash_length_bits * 2) * math.log(2)))
 
 	# TODO: calculate ETA until 90% chance of success (instead of 50%)
 	breakeven_remaining = breakeven_hashes - approx_hashes
-	breakeven_eta = str(datetime.timedelta(seconds=int(breakeven_remaining / hashrate))) if hashrate else "never"
+	breakeven_eta = (
+		(("-" * (breakeven_remaining < 0)) + str(datetime.timedelta(seconds=abs(int(breakeven_remaining / hashrate)))))
+		if hashrate
+		else "never"
+	)
 
 	prob_success = 1 - (math.e ** -(approx_hashes**2 / ((2**hash_length_bits) * 2)))
 	precollisions_found = db.get_collision_count()
@@ -210,8 +217,10 @@ def main() -> None:
 	)
 
 	parser = argparse.ArgumentParser(description="Birthday Party collision search server")
-	parser.add_argument("--dp-difficulty", type=int, default=16, help="Distinguished point difficulty in bits")
-	parser.add_argument("--hash-length", type=int, default=64, help="Hash length in bits")
+	parser.add_argument(
+		"--dp-difficulty", type=int, default=24, help="Distinguished point difficulty in bits (default 24)"
+	)
+	parser.add_argument("--hash-length", type=int, default=64, help="Hash length in bits (default 64)")
 	parser.add_argument("--host", type=str, default="localhost", help="Host to bind to")
 	parser.add_argument("--port", type=int, default=8080, help="Port to bind to")
 	args = parser.parse_args()
