@@ -14,27 +14,31 @@ class HashConfig:
 				If both are specified, the middle bytes are skipped.
 				
 		Note:
-			Total bytes (prefix_bytes + suffix_bytes) is limited to 27 to ensure the
-			ASCII representation (54 chars = 13.5 words) plus SHA256 padding fits
-			within a single 64-byte (16-word) SHA256 block.
+			Total bytes (prefix_bytes + suffix_bytes) must be between 5 and 27.
+			- Minimum 5 bytes ensures sufficient entropy for collision search
+			- Maximum 27 bytes ensures ASCII representation plus SHA256 padding fits
+			  within a single 64-byte (16-word) SHA256 block.
 		"""
 		self.prefix_bytes = prefix_bytes
 		self.suffix_bytes = suffix_bytes
 
 		# Validation
-		if not (0 <= prefix_bytes <= 32):
-			raise ValueError(f"prefix_bytes must be 0-32, got {prefix_bytes}")
-		if not (0 <= suffix_bytes <= 32):
-			raise ValueError(f"suffix_bytes must be 0-32, got {suffix_bytes}")
-		if prefix_bytes + suffix_bytes < 1:
-			raise ValueError("Must have at least 1 byte total (prefix + suffix)")
+		if not (0 <= prefix_bytes <= 27):
+			raise ValueError(f"prefix_bytes must be 0-27, got {prefix_bytes}")
+		if not (0 <= suffix_bytes <= 27):
+			raise ValueError(f"suffix_bytes must be 0-27, got {suffix_bytes}")
+		if prefix_bytes + suffix_bytes < 5:
+			raise ValueError(
+				f"Total bytes ({prefix_bytes} + {suffix_bytes}) must be at least 5. "
+				"This minimum ensures sufficient entropy for collision search."
+			)
 		if prefix_bytes + suffix_bytes > 27:
 			raise ValueError(
 				f"Total bytes ({prefix_bytes} + {suffix_bytes}) cannot exceed 27. "
 				"This limit ensures the ASCII representation plus SHA256 padding fits in a single block."
 			)
-		if suffix_bytes > 0 and prefix_bytes + suffix_bytes >= 32:
-			raise ValueError("When using suffix, prefix + suffix must be < 32 (must skip at least 1 byte)")
+		if suffix_bytes > 0 and prefix_bytes + suffix_bytes >= 27:
+			raise ValueError("When using suffix, prefix + suffix must be < 27 (must skip at least 1 byte)")
 
 	@property
 	def total_bytes(self) -> int:
