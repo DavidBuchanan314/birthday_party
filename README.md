@@ -35,11 +35,13 @@ python3 -m birthday_party.create_user <username>
 python3 -m birthday_party.server
 ```
 
-User accounts (and everything else) is stored in SQLite.
+User accounts are stored in SQLite (along with everything else).
+
+The server listens on `http://localhost:8080` by default.
 
 ## Start a Client
 
-This repo has two client implementations. You can run many client instances at once, but all clients must be running under the same configuration (also matching the server's configuration)
+This repo has two client implementations. You can run many client instances at once, but all clients must be running under the same configuration (same hash, same length, etc. - also matching the server's configuration)
 
 ```bash
 python3 -m birthday_party.ocl_sha256.mine <username> <usertoken>
@@ -47,7 +49,7 @@ python3 -m birthday_party.ocl_sha256.mine <username> <usertoken>
 
 ## "Finalization"
 
-The server does not find collisions directly, it finds what I call "pre-collisions" - two start points that result in the same distinguished point. Some extra computation is required to discover the actual collision point, which is performed by a finalization script:
+The server does not find collisions directly, it finds what I call "pre-collisions" - two start points that meet in the same distinguished point. Some extra computation is required to discover the actual collision point, which is performed by a finalization script:
 
 ```bash
 python3 -m birthday_party.ocl_sha256.finalize
