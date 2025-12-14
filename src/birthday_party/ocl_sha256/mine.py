@@ -10,7 +10,7 @@ import queue
 
 from .hash_config import HashConfig, DEFAULT_CONFIG
 
-WORK_SIZE = 0x400
+WORK_SIZE = 0x4000
 STEPS_PER_TASK = 0x400
 MAX_DPS_PER_CALL = 1024  # Maximum DPs to collect per mine() call
 
@@ -199,7 +199,7 @@ def mine(
 	server_url: str | None = None,
 	username: str | None = None,
 	usertoken: str | None = None,
-	dp_bits: int = 24,
+	dp_bits: int = 16,
 	dry_run: bool = False,
 	hash_config: HashConfig = DEFAULT_CONFIG,
 ):
@@ -300,7 +300,7 @@ def main():
 	parser.add_argument("usertoken", nargs="?", help="User token for authentication (not needed for --dry-run)")
 	parser.add_argument("--server", default="http://localhost:8080/", help="Server URL")
 	parser.add_argument(
-		"--dp-bits", type=int, default=24, help="Number of leading zero bits for distinguished points (default: 24)"
+		"--dp-bits", type=int, default=16, help="Number of leading zero bits for distinguished points (default: 16)"
 	)
 	parser.add_argument(
 		"--dry-run", action="store_true", help="Run without submitting to server (no username/token needed)"

@@ -5,7 +5,7 @@ from birthday_party.ocl_sha256.hash_config import HashConfig, DEFAULT_CONFIG
 # XXX: this is unoptimised, won't work for harder DP_DIFFICULTY
 
 
-def finalize(start_a: bytes, start_b: bytes, dp_bits: int = 24, hash_config: HashConfig = DEFAULT_CONFIG):
+def finalize(start_a: bytes, start_b: bytes, dp_bits: int = 16, hash_config: HashConfig = DEFAULT_CONFIG):
 	"""
 	Given two distinguished points from different chains, find the actual collision.
 
@@ -41,7 +41,7 @@ def main():
 	parser.add_argument("start_a", help="Starting point for chain A (hex)")
 	parser.add_argument("start_b", help="Starting point for chain B (hex)")
 	parser.add_argument(
-		"--dp-bits", type=int, default=24, help="Number of leading zero bits for distinguished points (default: 24)"
+		"--dp-bits", type=int, default=16, help="Number of leading zero bits for distinguished points (default: 16)"
 	)
 	parser.add_argument(
 		"--hash-prefix-bytes",

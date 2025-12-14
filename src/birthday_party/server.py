@@ -218,7 +218,7 @@ def main() -> None:
 
 	parser = argparse.ArgumentParser(description="Birthday Party collision search server")
 	parser.add_argument(
-		"--dp-difficulty", type=int, default=24, help="Distinguished point difficulty in bits (default 24)"
+		"--dp-difficulty", type=int, default=16, help="Distinguished point difficulty in bits (default 16)"
 	)
 	parser.add_argument("--hash-length", type=int, default=64, help="Hash length in bits (default 64)")
 	parser.add_argument("--host", type=str, default="localhost", help="Host to bind to")
