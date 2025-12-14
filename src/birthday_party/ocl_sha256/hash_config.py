@@ -37,8 +37,8 @@ class HashConfig:
 				f"Total bytes ({prefix_bytes} + {suffix_bytes}) cannot exceed 27. "
 				"This limit ensures the ASCII representation plus SHA256 padding fits in a single block."
 			)
-		if suffix_bytes > 0 and prefix_bytes + suffix_bytes >= 27:
-			raise ValueError("When using suffix, prefix + suffix must be < 27 (must skip at least 1 byte)")
+		if suffix_bytes > 0 and prefix_bytes + suffix_bytes > 26:
+			raise ValueError("When using suffix, prefix + suffix must be <= 26 (must skip at least 1 byte)")
 
 	@property
 	def total_bytes(self) -> int:

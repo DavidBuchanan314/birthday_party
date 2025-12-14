@@ -315,7 +315,7 @@ def main():
 		"--hash-suffix-bytes",
 		type=int,
 		default=0,
-		help="Number of suffix bytes from SHA256 hash (0-27, default: 0). Total with prefix must be 5-27 bytes.",
+		help="Number of suffix bytes from SHA256 hash (0-27, default: 0). Total with prefix must be 5-27 bytes (5-26 if both used).",
 	)
 	args = parser.parse_args()
 
