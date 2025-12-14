@@ -95,3 +95,25 @@ To mitigate dishonest clients more thoroughly, the server could distribute start
 One day I'd like to implement this and stand up a public instance. Maybe together we could compute 128-bit collisions. Either full-MD5 or half-SHA256, or maybe something else entirely. Yes, full-MD5 collisions already exist, but the shortest one is a full 64-byte block of random bytes. This technique could produce a shorter collision of either 16 binary bytes, or 32 bytes of ascii hex.
 
 Maybe I could write a WebGPU client, too. I's a lot easier to get thousands of people to visit a webpage than to install and run a python package.
+
+## Examples
+
+96-bit sha256 (first and last 48 bits)
+
+```
+$ echo -n IOCDCPMLBAIFPJFOOFGPEDFM | sha256sum
+36f4a214ddd22b9fcbd07ee89dc6aef59b1477f4166ce4ddc098dd26b02208d2  -
+
+$ echo -n NCOKOPPPBDDEAJPIEENMOIKL | sha256sum
+36f4a214ddd20c9c08f9af75d4768755835a850a640a37986ae3dd26b02208d2  -
+```
+
+```
+$ echo -n CCOCLKBGOPENFGMOFFKEDJDB | sha256sum
+ff22fcfe8709a8a10da40ef79d38ee1440fbbe317af3863a5063f15ae24265d4  -
+
+$ echo -n GLNIEFGCLEKEDFLGAKHILOKH | sha256sum
+ff22fcfe8709408a80f9f876a0ecd0607d95cd576463f7cd3726f15ae24265d4  -
+```
+
+Both of these were computed in about 10 hours on my 6700XT. I actually got lucky time-wise, my estimate was ~17h for a single collision.
