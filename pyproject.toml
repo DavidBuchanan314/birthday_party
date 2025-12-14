@@ -9,6 +9,7 @@ dependencies = [
     "requests>=2.32.0",
     "pyopencl>=2024.1",
     "numpy>=2.0.0",
+    "tqdm>=4.0.0",
 ]
 
 [project.optional-dependencies]
