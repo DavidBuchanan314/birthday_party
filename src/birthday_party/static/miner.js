@@ -587,26 +587,127 @@ function bytesToHex(bytes) {
     return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
+// Get configuration from URL parameters
+function getConfig() {
+    const params = new URLSearchParams(window.location.search);
+    return {
+        serverUrl: params.get('server') || 'http://localhost:8080',
+        username: params.get('username') || null,
+        usertoken: params.get('usertoken') || null,
+        dpBits: parseInt(params.get('dp_bits') || '16'),
+        dryRun: params.get('dry_run') === 'true' || (!params.get('username') && !params.get('usertoken'))
+    };
+}
+
+// Submit work to server
+async function submitWork(serverUrl, username, usertoken, results) {
+    try {
+        const payload = {
+            username: username,
+            usertoken: usertoken,
+            results: results.map(({ startPoint, dp }) => ({
+                start: bytesToHex(startPoint),
+                dp: bytesToHex(dp)
+            }))
+        };
+
+        const response = await fetch(`${serverUrl.replace(/\/$/, '')}/submit_work`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+            const text = await response.text();
+            console.error('SERVER ERROR:', text);
+            return false;
+        }
+
+        const data = await response.json();
+        console.log('Server says:', data.status);
+        return true;
+    } catch (error) {
+        console.error('Submission error:', error);
+        return false;
+    }
+}
+
+// Background submission worker (batches DPs every second)
+class SubmissionWorker {
+    constructor(serverUrl, username, usertoken) {
+        this.serverUrl = serverUrl;
+        this.username = username;
+        this.usertoken = usertoken;
+        this.queue = [];
+        this.running = false;
+        this.intervalId = null;
+    }
+
+    start() {
+        this.running = true;
+        this.intervalId = setInterval(async () => {
+            if (this.queue.length > 0) {
+                const batch = this.queue.splice(0);
+                console.log(`Submitting ${batch.length} DPs...`);
+                await submitWork(this.serverUrl, this.username, this.usertoken, batch);
+            }
+        }, 1000);
+    }
+
+    stop() {
+        this.running = false;
+        if (this.intervalId) {
+            clearInterval(this.intervalId);
+        }
+    }
+
+    enqueue(results) {
+        this.queue.push(...results);
+    }
+}
+
 // Main execution
 async function main() {
     console.log('='.repeat(70));
     console.log('Birthday Party WebGPU Browser Miner');
     console.log('='.repeat(70));
 
+    const config = getConfig();
+
+    console.log('\nConfiguration:');
+    console.log(`  Server: ${config.serverUrl}`);
+    console.log(`  Username: ${config.username || '(none)'}`);
+    console.log(`  DP bits: ${config.dpBits}`);
+    console.log(`  Mode: ${config.dryRun ? 'DRY RUN' : 'submitting to server'}`);
+
+    if (config.dryRun) {
+        console.log('\n  To submit to server, add URL parameters:');
+        console.log('  ?server=http://localhost:8080&username=YOUR_USER&usertoken=YOUR_TOKEN');
+    }
+
     try {
         const miner = new PollardRhoMiner();
         await miner.initialize();
 
-        console.log('\nStarting mining loop (dp_bits=16)...');
-        console.log('Press Ctrl+C (or close tab) to stop\n');
+        // Set up submission worker if not dry run
+        let submissionWorker = null;
+        if (!config.dryRun) {
+            submissionWorker = new SubmissionWorker(config.serverUrl, config.username, config.usertoken);
+            submissionWorker.start();
+        }
+
+        console.log(`\nStarting mining loop (dp_bits=${config.dpBits})...`);
+        console.log('Close tab to stop\n');
 
         let totalDPs = 0;
         let totalHashes = 0;
         const startTime = performance.now();
 
         // Mine continuously
-        for (let iter = 0; iter < 10; iter++) {  // Just 10 iterations for demo
-            const { results, rate, numHashes } = await miner.mine(16);
+        while (true) {
+            const { results, rate, numHashes } = await miner.mine(config.dpBits);
             totalHashes += numHashes;
 
             if (results.length > 0) {
@@ -614,25 +715,23 @@ async function main() {
                 const elapsed = (performance.now() - startTime) / 1000;
                 console.log(`Found ${results.length} DPs! Total: ${totalDPs} DPs in ${elapsed.toFixed(1)}s (${(totalHashes/elapsed).toFixed(0)} H/s, ${(totalDPs/elapsed).toFixed(2)} DP/s)`);
 
-                for (const { startPoint, dp } of results) {
-                    console.log({
-                        start: bytesToHex(startPoint),
-                        dp: bytesToHex(dp)
-                    });
+                if (config.dryRun) {
+                    // Dry run: just log
+                    for (const { startPoint, dp } of results) {
+                        console.log({
+                            start: bytesToHex(startPoint),
+                            dp: bytesToHex(dp)
+                        });
+                    }
+                } else {
+                    // Queue for submission
+                    submissionWorker.enqueue(results);
                 }
             }
 
-            // Show progress every iteration
-            if (iter % 1 === 0) {
-                const elapsed = (performance.now() - startTime) / 1000;
-                console.log(`Iteration ${iter + 1}: ${rate.toFixed(0)} H/s (${totalDPs} DPs total)`);
-            }
+            // Yield to browser occasionally
+            await new Promise(resolve => setTimeout(resolve, 0));
         }
-
-        const finalElapsed = (performance.now() - startTime) / 1000;
-        console.log(`\nMining complete!`);
-        console.log(`Total: ${totalDPs} DPs, ${totalHashes.toLocaleString()} hashes in ${finalElapsed.toFixed(1)}s`);
-        console.log(`Average: ${(totalHashes/finalElapsed).toFixed(0)} H/s, ${(totalDPs/finalElapsed).toFixed(2)} DP/s`);
 
     } catch (error) {
         console.error('Error:', error);
