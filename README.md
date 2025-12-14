@@ -8,11 +8,11 @@ Distributed hash collision search dashboard
 1. Clone the repository
 2. Install dependencies:
    ```bash
-   pip install -e .
+   python3 -m pip install -e .
    ```
 3. (Optional) Install dev dependencies:
    ```bash
-   pip install -e ".[dev]"
+   python3 -m pip install -e ".[dev]"
    ```
 4. (Optional) Set up pre-commit hooks to auto-format on commit:
    ```bash

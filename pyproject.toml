@@ -4,17 +4,19 @@ version = "0.1.0"
 description = "A coordination server for distributed hash collision search via parallel pollard rho with distinguished points"
 requires-python = ">=3.10"
 dependencies = [
-    "aiohttp",
-    "jinja2",
-    "requests",
+    "aiohttp>=3.12.0",
+    "jinja2>=3.1.0",
+    "requests>=2.32.0",
+    "pyopencl>=2024.1",
+    "numpy>=2.0.0",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "ruff",
-    "pre-commit",
-    "pytest",
-    "pytest-aiohttp",
+    "ruff>=0.3.0",
+    "pre-commit>=4.0.0",
+    "pytest>=8.0.0",
+    "pytest-aiohttp>=1.0.0",
 ]
 
 [build-system]
