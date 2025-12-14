@@ -173,7 +173,7 @@ def main():
 		"--dp-bits",
 		type=int,
 		default=24,
-		help="Distinguished point difficulty in bits (default: 16)",
+		help="Distinguished point difficulty in bits (default: 24)",
 	)
 	parser.add_argument(
 		"--iterations",
