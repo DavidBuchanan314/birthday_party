@@ -93,3 +93,5 @@ A client could still lie about the starting point, but submitting real distingui
 To mitigate dishonest clients more thoroughly, the server could distribute starting points rather than having the client pick them for itself. A small percentage of distributed start points would be ones that the server already knows the solution to, thus allowing it to detect dishonest clients.
 
 One day I'd like to implement this and stand up a public instance. Maybe together we could compute 128-bit collisions. Either full-MD5 or half-SHA256, or maybe something else entirely. Yes, full-MD5 collisions already exist, but the shortest one is a full 64-byte block of random bytes. This technique could produce a shorter collision of either 16 binary bytes, or 32 bytes of ascii hex.
+
+Maybe I could write a WebGPU client, too. I's a lot easier to get thousands of people to visit a webpage than to install and run a python package.
