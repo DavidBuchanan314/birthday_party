@@ -65,7 +65,9 @@ class PollardRhoMiner:
 		# Build kernel
 		srcdir = os.path.dirname(os.path.realpath(__file__))
 		build_options = f"-DSTEPS_PER_TASK={self.steps_per_task} -DMAX_DPS_PER_CALL={MAX_DPS_PER_CALL}"
-		prg = cl.Program(ctx, open(srcdir + "/sha256.cl").read()).build(options=build_options)
+		with open(srcdir + "/sha256.cl") as f:
+			kernel_src = f.read()
+		prg = cl.Program(ctx, kernel_src).build(options=build_options)
 		self.kernel = cl.Kernel(prg, "mine")
 
 	def mine(self, dp_bits: int = 16) -> tuple[list[tuple[bytes, bytes]], float]:
