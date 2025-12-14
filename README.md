@@ -1,80 +1,81 @@
-# birthday-party
-Distributed hash collision search dashboard
+# Birthday Party
 
-## Local Development
+Implements distributed hash collision search via pollard rho with distinguished points. For background, check out my [blog post](https://www.da.vidbuchanan.co.uk/blog/colliding-secure-hashes.html).
 
-### Installation
+A central server tracks work done, detects collisions, and provides stats in a web dashboard.
 
-1. Clone the repository
-2. Install dependencies:
-   ```bash
-   python3 -m pip install -e .
-   ```
-3. (Optional) Install dev dependencies:
-   ```bash
-   python3 -m pip install -e ".[dev]"
-   ```
-4. (Optional) Set up pre-commit hooks to auto-format on commit:
-   ```bash
-   pre-commit install
-   ```
+There's an OpenCL client implementation for *truncated* SHA256, which runs at 4.3GH/s on my 6700 XT GPU (for reference, hashcat on the same card gets 5.2GH/s).
 
-### Creating Users
+Example result:
 
-To create a new user with an auto-generated UUIDv4 password:
+```
+$ echo -n retr0id_662d970782071aa7a038dce6 | sha256sum
+307e0e71a409d2bf67e76c676d81bd0ff87ee228cd8f991714589d0564e6ea9a  -
+
+$ echo -n retr0id_430d19a6c51814d895666635 | sha256sum
+307e0e71a4098e7fb7d72c86cd041a006181c6d8e29882b581d69d0564e6ea9a  -
+```
+
+(Note: The version of the code in this repo does not support string prefixes - but it's shouldn't be hard to modify it)
+
+## Installation
+
+Clone the repo, then:
 ```bash
+python3 -m pip install -e .
+```
+
+## Start the Server
+
+```bash
+# first create a user (an API token will be printed)
 python3 -m birthday_party.create_user <username>
-```
 
-To create a user with a specific password:
-```bash
-python3 -m birthday_party.create_user <username> --password <password>
-```
-
-Example:
-```bash
-python3 -m birthday_party.create_user alice
-# Output: Generated password: 550e8400-e29b-41d4-a716-446655440000
-```
-
-### Running the Server
-
-Start the development server:
-```bash
+# start the server itself (see --help for args)
 python3 -m birthday_party.server
 ```
 
-The server will run on `http://localhost:8080` by default.
+User accounts (and everything else) is stored in SQLite.
 
-### Testing
+## Start a Client
 
-Run the integration test suite:
+This repo has two client implementations. You can run many client instances at once, but all clients must be running under the same configuration (also matching the server's configuration)
+
 ```bash
-pytest
+python3 -m birthday_party.ocl_sha256.mine <username> <usertoken>
 ```
 
-Run with verbose output:
+## "Finalization"
+
+The server does not find collisions directly, it finds what I call "pre-collisions" - two start points that result in the same distinguished point. Some extra computation is required to discover the actual collision point, which is performed by a finalization script:
+
+```bash
+python3 -m birthday_party.ocl_sha256.finalize
+```
+
+## Development
+
+Install dev dependencies:
+```bash
+python3 -m pip install -e ".[dev]"
+```
+
+Optionally, Set up pre-commit hooks to auto-format on commit:
+```bash
+pre-commit install
+```
+
+Run tests via:
 ```bash
 pytest -v
 ```
 
-Run a specific test file:
-```bash
-pytest tests/test_server.py
-```
+## Future Ideas
 
-### Code Formatting
+The current implementation assumes clients are trusted to report work honestly. With some changes, it should be possible to devise a system that works even with untrusted clients. Rather than submitting distinguished points, clients could submit the *penultimate* point - one that hashes to a distingushed point. The server can cheaply verify this.
 
-The project uses Ruff for formatting (with tabs for indentation).
+A client could still lie about the starting point, but submitting real distinguished points with fake starting points would be equally as hard as just doing the work honestly.
 
-If you installed pre-commit hooks, code will be automatically formatted on each commit.
+To mitigate dishonest clients more thoroughly, the server could distribute starting points rather than having the client pick them for itself. A small percentage of distributed start points would be ones that the server already knows the solution to, thus allowing it to detect dishonest clients.
 
-Manual formatting:
-```bash
-ruff format .
-```
-
-Check for linting issues:
-```bash
-ruff check .
-```
+One day I'd like to implement this and stand up a public instance. Maybe together we could compute 128-bit collisions. Either full-MD5 or half-SHA256, or maybe something else entirely. Yes, full-MD5 collisions already exist, but the shortest one is a full 64-byte block of random bytes. This technique could produce a shorter collision of either 16 binary bytes, or 32 bytes of ascii hex.
