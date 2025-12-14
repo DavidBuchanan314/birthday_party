@@ -12,7 +12,7 @@ Distributed hash collision search dashboard
    ```
 3. (Optional) Install dev dependencies:
    ```bash
-   python3 -m ppip install -e ".[dev]"
+   python3 -m pip install -e ".[dev]"
    ```
 4. (Optional) Set up pre-commit hooks to auto-format on commit:
    ```bash
