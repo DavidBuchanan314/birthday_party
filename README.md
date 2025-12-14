@@ -1,6 +1,6 @@
 # Birthday Party
 
-Implements distributed hash collision search via pollard rho with distinguished points. For background, check out my [blog post](https://www.da.vidbuchanan.co.uk/blog/colliding-secure-hashes.html). My original implementation was too janky to publish, but this version is better (albeit substantially AI-generated - beware misleading in-code comments/strings, AI does not understand the concept well).
+Implements distributed hash collision search via [parallel pollard's rho with distinguished points](https://www.cs.csi.cuny.edu/~zhangx/papers/P_2018_LISAT_Weber_Zhang.pdf). For background, check out my [blog post](https://www.da.vidbuchanan.co.uk/blog/colliding-secure-hashes.html). My original implementation was too janky to publish, but this version is better (albeit substantially AI-generated - beware misleading in-code comments/strings, AI does not understand the concept well).
 
 A central server tracks work done, detects collisions, and provides stats in a web dashboard (powered by SQLite).
 
