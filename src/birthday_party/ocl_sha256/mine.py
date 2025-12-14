@@ -8,10 +8,11 @@ import requests
 import threading
 import queue
 
+from .hash_config import HashConfig, DEFAULT_CONFIG
+
 WORK_SIZE = 0x4000
 STEPS_PER_TASK = 0x400
 MAX_DPS_PER_CALL = 1024  # Maximum DPs to collect per mine() call
-HASH_LENGTH = 8  # bytes (truncated SHA256)
 
 DEBUG = 0
 
@@ -21,10 +22,11 @@ def bytes_to_ascii(x: bytes) -> str:
 	return "".join(chr((b >> 4) + ord("A")) + chr((b & 0xF) + ord("A")) for b in x)
 
 
-def hash_fn(x: bytes) -> bytes:
+def hash_fn(x: bytes, hash_config: HashConfig = DEFAULT_CONFIG) -> bytes:
 	"""Hash function matching the OpenCL implementation: truncated SHA256 with nibble->ASCII encoding"""
 	ascii_repr = bytes_to_ascii(x)
-	return hashlib.sha256(ascii_repr.encode()).digest()[:HASH_LENGTH]
+	full_hash = hashlib.sha256(ascii_repr.encode()).digest()
+	return hash_config.truncate_hash(full_hash)
 
 
 def is_distinguished(x: bytes, dp_bits: int) -> bool:
@@ -34,12 +36,16 @@ def is_distinguished(x: bytes, dp_bits: int) -> bool:
 
 
 class PollardRhoMiner:
-	def __init__(self, work_size: int = WORK_SIZE, steps_per_task: int = STEPS_PER_TASK) -> None:
+	def __init__(
+		self, work_size: int = WORK_SIZE, steps_per_task: int = STEPS_PER_TASK, hash_config: HashConfig = DEFAULT_CONFIG
+	) -> None:
 		self.work_size = work_size
 		self.steps_per_task = steps_per_task
+		self.hash_config = hash_config
 
-		# Initialize random states for each thread (truncated to 8 bytes = 2 uint32s)
-		self.current_states = np.random.randint(0, 2**32, size=(work_size, 2), dtype=np.uint32)
+		# Initialize random states for each thread
+		num_uint32s = hash_config.num_uint32s
+		self.current_states = np.random.randint(0, 2**32, size=(work_size, num_uint32s), dtype=np.uint32)
 		self.start_points = self.current_states.copy()
 
 		ctx = cl.create_some_context()
@@ -50,8 +56,9 @@ class PollardRhoMiner:
 		self.current_states_buf = cl.Buffer(ctx, cl.mem_flags.READ_WRITE, size=self.current_states.nbytes)
 		self.start_points_buf = cl.Buffer(ctx, cl.mem_flags.READ_WRITE, size=self.start_points.nbytes)
 
-		# DP buffer: pre-filled with random data, also used for output (4 uint32s = 2 for start + 2 for dp)
-		self.dp_buffer = np.random.randint(0, 2**32, size=(MAX_DPS_PER_CALL, 4), dtype=np.uint32)
+		# DP buffer: pre-filled with random data, also used for output (num_uint32s*2 per entry: start + dp)
+		dp_buffer_width = num_uint32s * 2
+		self.dp_buffer = np.random.randint(0, 2**32, size=(MAX_DPS_PER_CALL, dp_buffer_width), dtype=np.uint32)
 		# Set the first bit of each entry to ensure start points are not distinguished
 		self.dp_buffer[:, 0] |= 0x80000000
 		self.dp_count = np.array([0], dtype=np.uint32)
@@ -66,7 +73,11 @@ class PollardRhoMiner:
 
 		# Build kernel
 		srcdir = os.path.dirname(os.path.realpath(__file__))
-		build_options = f"-DSTEPS_PER_TASK={self.steps_per_task} -DMAX_DPS_PER_CALL={MAX_DPS_PER_CALL}"
+		build_options = (
+			f"-DSTEPS_PER_TASK={self.steps_per_task} "
+			f"-DMAX_DPS_PER_CALL={MAX_DPS_PER_CALL} "
+			f"{hash_config.get_opencl_defines()}"
+		)
 		with open(srcdir + "/sha256.cl") as f:
 			kernel_src = f.read()
 		prg = cl.Program(ctx, kernel_src).build(options=build_options)
@@ -121,16 +132,22 @@ class PollardRhoMiner:
 		cl.enqueue_copy(self.queue, self.current_states, self.current_states_buf)
 		cl.enqueue_copy(self.queue, self.start_points, self.start_points_buf)
 
-		# Convert DPs to bytes tuples (8 bytes each)
+		# Convert DPs to bytes tuples
 		results = []
+		num_uint32s = self.hash_config.num_uint32s
+		total_bytes = self.hash_config.total_bytes
 		for i in range(num_dps):
-			start_point = b"".join(int(x).to_bytes(4, "big") for x in self.dp_buffer[i, :2])
-			dp = b"".join(int(x).to_bytes(4, "big") for x in self.dp_buffer[i, 2:4])
+			# Convert uint32s to bytes, then truncate to exact byte count
+			start_point = b"".join(int(x).to_bytes(4, "big") for x in self.dp_buffer[i, :num_uint32s])[:total_bytes]
+			dp = b"".join(int(x).to_bytes(4, "big") for x in self.dp_buffer[i, num_uint32s : num_uint32s * 2])[
+				:total_bytes
+			]
 			results.append((start_point, dp))
 
 		# Refill only the used dp_buffer entries with fresh random data for next iteration
 		if num_dps > 0:
-			self.dp_buffer[:num_dps] = np.random.randint(0, 2**32, size=(num_dps, 4), dtype=np.uint32)
+			dp_buffer_width = num_uint32s * 2
+			self.dp_buffer[:num_dps] = np.random.randint(0, 2**32, size=(num_dps, dp_buffer_width), dtype=np.uint32)
 			# Set the first bit of each entry to ensure start points are not distinguished
 			self.dp_buffer[:num_dps, 0] |= 0x80000000
 			cl.enqueue_copy(self.queue, self.dp_buffer_buf, self.dp_buffer)
@@ -184,10 +201,11 @@ def mine(
 	usertoken: str | None = None,
 	dp_bits: int = 24,
 	dry_run: bool = False,
+	hash_config: HashConfig = DEFAULT_CONFIG,
 ):
 	"""Run the mining loop, finding distinguished points and reporting them to the server."""
-	print("Initializing Pollard Rho miner...")
-	miner = PollardRhoMiner()
+	print(f"Initializing Pollard Rho miner with {hash_config}...")
+	miner = PollardRhoMiner(hash_config=hash_config)
 
 	# Create queue and background submission thread (only if not dry run)
 	dp_queue = None
@@ -219,22 +237,23 @@ def mine(
 					f"Found {len(results)} DPs! Total: {total_dps} DPs in {elapsed:.1f}s ({total_hashes/elapsed:,.0f} H/s, {total_dps/elapsed:.2f} DP/s)"
 				)
 
-				# Add DPs to queue for background submission (only if not dry run)
-				if dp_queue is not None:
-					for start_point, dp in results:
-						dp_queue.put(
-							{
-								"start": start_point.hex(),
-								"dp": dp.hex(),
-							}
-						)
+				for start_point, dp in results:
+					msg = {
+						"start": start_point.hex(),
+						"dp": dp.hex(),
+					}
+					if dp_queue is None:
+						print(msg)  # dry run mode
+					else:
+						dp_queue.put(msg)  # queue for submission to server
 
 				if DEBUG:
-					# Hash function for verification
-					def hash_fn(x: bytes):
+					# Hash function for verification (uses the miner's hash_config)
+					def hash_fn_local(x: bytes):
 						"""Hash function matching the OpenCL implementation: truncated SHA256 with nibble->ASCII encoding"""
 						ascii_repr = "".join(chr((b >> 4) + ord("A")) + chr((b & 0xF) + ord("A")) for b in x)
-						return hashlib.sha256(ascii_repr.encode()).digest()[:8]
+						full_hash = hashlib.sha256(ascii_repr.encode()).digest()
+						return miner.hash_config.truncate_hash(full_hash)
 
 					def is_distinguished(x: bytes, dp_bits: int):
 						"""Check if a hash is a distinguished point"""
@@ -250,7 +269,7 @@ def mine(
 					point = start_point
 					iterations = 0
 					while point != dp and iterations < 1000000:
-						point = hash_fn(point)
+						point = hash_fn_local(point)
 						iterations += 1
 
 					if point == dp:
@@ -286,13 +305,20 @@ def main():
 	parser.add_argument(
 		"--dry-run", action="store_true", help="Run without submitting to server (no username/token needed)"
 	)
+	parser.add_argument(
+		"--hash-bytes",
+		type=int,
+		default=8,
+		help="Number of prefix bytes from SHA256 hash (1-32, default: 8 for backward compatibility)",
+	)
 	args = parser.parse_args()
 
 	# Validate required arguments when not in dry run mode
 	if not args.dry_run and (not args.username or not args.usertoken):
 		parser.error("username and usertoken are required unless --dry-run is specified")
 
-	mine(args.server, args.username, args.usertoken, args.dp_bits, dry_run=args.dry_run)
+	hash_config = HashConfig(prefix_bytes=args.hash_bytes)
+	mine(args.server, args.username, args.usertoken, args.dp_bits, dry_run=args.dry_run, hash_config=hash_config)
 
 
 if __name__ == "__main__":

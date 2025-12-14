@@ -1,6 +1,6 @@
 // sha256 impl is a collab between deepseek (initial impl) and claude (perf optimizations)
 
-// STEPS_PER_TASK and MAX_DPS_PER_CALL are passed via compile options
+// STEPS_PER_TASK, MAX_DPS_PER_CALL, and HASH_PREFIX_BYTES are passed via compile options
 #ifndef STEPS_PER_TASK
 #define STEPS_PER_TASK 0x100  // default fallback
 #endif
@@ -9,6 +9,15 @@
 #define MAX_DPS_PER_CALL 1024  // default fallback
 #endif
 
+#ifndef HASH_PREFIX_BYTES
+#define HASH_PREFIX_BYTES 8  // default: 8-byte prefix
+#endif
+
+// Derived constants for hash truncation
+#define HASH_NUM_UINT32S ((HASH_PREFIX_BYTES + 3) / 4)  // round up to whole words
+#define HASH_ASCII_BYTES (HASH_PREFIX_BYTES * 2)  // each byte becomes 2 ASCII chars
+
+typedef uchar uint8_t;
 typedef uint uint32_t;
 typedef ulong uint64_t;
 
@@ -100,39 +109,100 @@ void sha256_update(uint32_t state_out[8], uint32_t state_in[8], uint32_t block[1
 	state_out[7] = state_in[7] + h;
 }
 
-// Convert 8-byte truncated hash (2 uint32s) to 16-byte ASCII representation
-void hash_to_ascii_message(uint32_t hash[2], uint32_t msg[16]) {
+// Convert truncated hash to ASCII representation with SHA256 padding
+// Generic version that works for any HASH_PREFIX_BYTES (1-32)
+void hash_to_ascii_message(uint32_t hash[HASH_NUM_UINT32S], uint32_t msg[16]) {
 	// Convert each nibble to ASCII by adding 'A' (0x41)
-	// Using word-level bit operations to avoid byte indexing
+	// Each byte becomes 2 ASCII characters (high nibble, low nibble)
+	// Process in 32-bit chunks for performance
 
-	// Each uint32 input produces 2 uint32s of output (8 nibbles -> 8 ASCII bytes)
-	uint32_t val0 = hash[0];
-	msg[0] = ((((val0 >> 28) & 0xF) + 'A') << 24) |
-	         ((((val0 >> 24) & 0xF) + 'A') << 16) |
-	         ((((val0 >> 20) & 0xF) + 'A') << 8) |
-	         (((val0 >> 16) & 0xF) + 'A');
-	msg[1] = ((((val0 >> 12) & 0xF) + 'A') << 24) |
-	         ((((val0 >> 8) & 0xF) + 'A') << 16) |
-	         ((((val0 >> 4) & 0xF) + 'A') << 8) |
-	         ((val0 & 0xF) + 'A');
+	int msg_idx = 0;
 
-	uint32_t val1 = hash[1];
-	msg[2] = ((((val1 >> 28) & 0xF) + 'A') << 24) |
-	         ((((val1 >> 24) & 0xF) + 'A') << 16) |
-	         ((((val1 >> 20) & 0xF) + 'A') << 8) |
-	         (((val1 >> 16) & 0xF) + 'A');
-	msg[3] = ((((val1 >> 12) & 0xF) + 'A') << 24) |
-	         ((((val1 >> 8) & 0xF) + 'A') << 16) |
-	         ((((val1 >> 4) & 0xF) + 'A') << 8) |
-	         ((val1 & 0xF) + 'A');
+	// Process complete 4-byte words
+	// Each 4-byte word produces 8 ASCII bytes (2 output words)
+	const int complete_words = HASH_PREFIX_BYTES / 4;
 
-	// Padding: 0x80 followed by zeros, then length (16 bytes = 128 bits)
-	msg[4] = 0x80000000;
-	for (int i = 5; i < 14; i++) {
+	#pragma unroll
+	for (int i = 0; i < complete_words; i++) {
+		uint32_t val = hash[i];
+
+		// Convert high 2 bytes to first output word (4 ASCII chars)
+		msg[msg_idx++] = ((((val >> 28) & 0xF) + 'A') << 24) |
+		                 ((((val >> 24) & 0xF) + 'A') << 16) |
+		                 ((((val >> 20) & 0xF) + 'A') << 8) |
+		                 (((val >> 16) & 0xF) + 'A');
+
+		// Convert low 2 bytes to second output word (4 ASCII chars)
+		msg[msg_idx++] = ((((val >> 12) & 0xF) + 'A') << 24) |
+		                 ((((val >> 8) & 0xF) + 'A') << 16) |
+		                 ((((val >> 4) & 0xF) + 'A') << 8) |
+		                 ((val & 0xF) + 'A');
+	}
+
+	// Handle partial word (1, 2, or 3 remaining bytes)
+	const int remainder_bytes = HASH_PREFIX_BYTES % 4;
+	if (remainder_bytes > 0) {
+		uint32_t val = hash[complete_words];
+
+		// Process remaining bytes one at a time
+		uint32_t ascii_accum = 0;
+		int ascii_bytes = 0;
+
+		for (int byte_idx = 0; byte_idx < remainder_bytes; byte_idx++) {
+			// Extract byte (big-endian: shift from MSB)
+			uint8_t b = (val >> (24 - byte_idx * 8)) & 0xFF;
+
+			// Convert to 2 ASCII characters
+			uint8_t high_nibble = (b >> 4) + 'A';
+			uint8_t low_nibble = (b & 0xF) + 'A';
+
+			// Accumulate into output word (big-endian)
+			ascii_accum = (ascii_accum << 8) | high_nibble;
+			ascii_bytes++;
+			if (ascii_bytes == 4) {
+				msg[msg_idx++] = ascii_accum;
+				ascii_accum = 0;
+				ascii_bytes = 0;
+			}
+
+			ascii_accum = (ascii_accum << 8) | low_nibble;
+			ascii_bytes++;
+			if (ascii_bytes == 4) {
+				msg[msg_idx++] = ascii_accum;
+				ascii_accum = 0;
+				ascii_bytes = 0;
+			}
+		}
+
+		// Flush any remaining ASCII bytes with SHA256 padding
+		if (ascii_bytes > 0) {
+			// Add 0x80 padding byte
+			ascii_accum = (ascii_accum << 8) | 0x80;
+			ascii_bytes++;
+
+			// Pad to word boundary
+			while (ascii_bytes < 4) {
+				ascii_accum = ascii_accum << 8;
+				ascii_bytes++;
+			}
+			msg[msg_idx++] = ascii_accum;
+		} else {
+			// No partial word, add 0x80 as new word
+			msg[msg_idx++] = 0x80000000;
+		}
+	} else {
+		// No remainder, add 0x80 padding as new word
+		msg[msg_idx++] = 0x80000000;
+	}
+
+	// Pad with zeros until length field
+	for (int i = msg_idx; i < 14; i++) {
 		msg[i] = 0;
 	}
-	msg[14] = 0;    // Length high word
-	msg[15] = 128;  // Length low word (in bits)
+
+	// Add message length in bits (big-endian 64-bit)
+	msg[14] = 0;                      // High word
+	msg[15] = HASH_ASCII_BYTES * 8;   // Low word (length in bits)
 }
 
 // SHA-256 constants for initial state
@@ -142,28 +212,28 @@ constant uint32_t INITIAL_H[8] = {
 };
 
 __kernel void mine(
-	__global uint32_t* current_states,    // [work_size][2] - current state for each thread (truncated to 8 bytes)
-	__global uint32_t* start_points,      // [work_size][2] - start point for each thread (truncated to 8 bytes)
-	__global uint32_t* dp_buffer,         // [MAX_DPS_PER_CALL][4] - pre-filled with random data, then output: (start, dp) pairs
+	__global uint32_t* current_states,    // [work_size][HASH_NUM_UINT32S] - current state for each thread
+	__global uint32_t* start_points,      // [work_size][HASH_NUM_UINT32S] - start point for each thread
+	__global uint32_t* dp_buffer,         // [MAX_DPS_PER_CALL][HASH_NUM_UINT32S*2] - output: (start, dp) pairs
 	__global volatile uint* dp_count,     // number of DPs found
 	const uint32_t mask0,                 // mask for first word of hash
 	const uint32_t mask1                  // mask for second word of hash
 )
 {
 	uint gid = get_global_id(0);
-	uint thread_offset = gid * 2;
+	uint thread_offset = gid * HASH_NUM_UINT32S;
 
 	// Load current state and start point for this thread
-	uint32_t state[2];
-	uint32_t start[2];
-	for (int i = 0; i < 2; i++) {
+	uint32_t state[HASH_NUM_UINT32S];
+	uint32_t start[HASH_NUM_UINT32S];
+	for (int i = 0; i < HASH_NUM_UINT32S; i++) {
 		state[i] = current_states[thread_offset + i];
 		start[i] = start_points[thread_offset + i];
 	}
 
 	// Perform STEPS_PER_TASK iterations
 	for (uint step = 0; step < STEPS_PER_TASK; step++) {
-		// Convert 8-byte state to 16-byte ASCII message (with padding already included)
+		// Convert truncated state to ASCII message (with padding already included)
 		uint32_t msg[16];
 		hash_to_ascii_message(state, msg);
 
@@ -179,34 +249,35 @@ __kernel void mine(
 		// Compute full SHA256
 		sha256_update(hash_full, initial_h_local, msg);
 
-		// Truncate to first 8 bytes (2 words)
-		state[0] = hash_full[0];
-		state[1] = hash_full[1];
+		// Truncate to prefix bytes
+		for (int i = 0; i < HASH_NUM_UINT32S; i++) {
+			state[i] = hash_full[i];
+		}
 
 		// Check if this is a distinguished point
 		if (((state[0] & mask0) == 0) && ((state[1] & mask1) == 0)) {
 			// Found a DP! Store it if there's room
 			uint dp_idx = atomic_inc(dp_count);
 			if (dp_idx < MAX_DPS_PER_CALL) {
-				uint buf_offset = dp_idx * 4;
+				uint buf_offset = dp_idx * (HASH_NUM_UINT32S * 2);
 
 				// Read new random start from dp_buffer (before overwriting)
-				uint32_t new_start[2];
-				for (int i = 0; i < 2; i++) {
+				uint32_t new_start[HASH_NUM_UINT32S];
+				for (int i = 0; i < HASH_NUM_UINT32S; i++) {
 					new_start[i] = dp_buffer[buf_offset + i];
 				}
 
 				// Store start point
-				for (int i = 0; i < 2; i++) {
+				for (int i = 0; i < HASH_NUM_UINT32S; i++) {
 					dp_buffer[buf_offset + i] = start[i];
 				}
 				// Store distinguished point
-				for (int i = 0; i < 2; i++) {
-					dp_buffer[buf_offset + 2 + i] = state[i];
+				for (int i = 0; i < HASH_NUM_UINT32S; i++) {
+					dp_buffer[buf_offset + HASH_NUM_UINT32S + i] = state[i];
 				}
 
 				// Use the random data we read as the new start
-				for (int i = 0; i < 2; i++) {
+				for (int i = 0; i < HASH_NUM_UINT32S; i++) {
 					start[i] = new_start[i];
 					state[i] = new_start[i];
 				}
@@ -215,7 +286,7 @@ __kernel void mine(
 	}
 
 	// Save current state and start point for next invocation
-	for (int i = 0; i < 2; i++) {
+	for (int i = 0; i < HASH_NUM_UINT32S; i++) {
 		current_states[thread_offset + i] = state[i];
 		start_points[thread_offset + i] = start[i];
 	}
