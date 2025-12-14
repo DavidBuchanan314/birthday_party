@@ -1,12 +1,12 @@
 # Birthday Party
 
-Implements distributed hash collision search via pollard rho with distinguished points. For background, check out my [blog post](https://www.da.vidbuchanan.co.uk/blog/colliding-secure-hashes.html).
+Implements distributed hash collision search via pollard rho with distinguished points. For background, check out my [blog post](https://www.da.vidbuchanan.co.uk/blog/colliding-secure-hashes.html). My original implementation was too janky to publish, but this version is better (albeit substantially AI-generated - beware misleading in-code comments/strings, AI does not understand the concept well).
 
-A central server tracks work done, detects collisions, and provides stats in a web dashboard.
+A central server tracks work done, detects collisions, and provides stats in a web dashboard (powered by SQLite).
 
-There's an OpenCL client implementation for *truncated* SHA256, which runs at 4.3GH/s on my 6700 XT GPU (for reference, hashcat on the same card gets 5.2GH/s).
+There's an OpenCL client implementation for *truncated* SHA256, which runs at 4.3GH/s on my 6700 XT GPU (for reference, hashcat on the same card gets 5.2GH/s). I vaguely recall my original (blogpost-era) implementation getting 2.6GH/s.
 
-Example result:
+Example result: (96-bit sha256 collision - first and last 48 bits)
 
 ```
 $ echo -n retr0id_662d970782071aa7a038dce6 | sha256sum
@@ -35,8 +35,6 @@ python3 -m birthday_party.create_user <username>
 python3 -m birthday_party.server
 ```
 
-User accounts are stored in SQLite (along with everything else).
-
 The server listens on `http://localhost:8080` by default.
 
 ## Start a Client
@@ -46,6 +44,10 @@ This repo has two client implementations. You can run many client instances at o
 ```bash
 python3 -m birthday_party.ocl_sha256.mine <username> <usertoken>
 ```
+
+If you're planning on doing a lot of computation (many colliding bits), you might want to tune the parameters first. See `birthday_party.ocl_sha256.optimize_params` to help discover ideal parameters for your hardware.
+
+See also `birthday_party.cpu_md5.mine` (if you want to look at the code, this is the simpler of the two to understand)
 
 ## "Finalization"
 
