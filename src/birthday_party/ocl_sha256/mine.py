@@ -309,13 +309,13 @@ def main():
 		"--hash-bytes",
 		type=int,
 		default=8,
-		help="Number of prefix bytes from SHA256 hash (0-32, default: 8 for backward compatibility)",
+		help="Number of prefix bytes from SHA256 hash (0-27, default: 8). Total with suffix cannot exceed 27.",
 	)
 	parser.add_argument(
 		"--hash-suffix-bytes",
 		type=int,
 		default=0,
-		help="Number of suffix bytes from SHA256 hash (0-32, default: 0). If specified, middle bytes are skipped.",
+		help="Number of suffix bytes from SHA256 hash (0-27, default: 0). Total with prefix cannot exceed 27.",
 	)
 	args = parser.parse_args()
 

@@ -9,9 +9,14 @@ class HashConfig:
 		Initialize hash configuration.
 
 		Args:
-			prefix_bytes: Number of bytes to take from the start of SHA256 hash (0-32)
-			suffix_bytes: Number of bytes to take from the end of SHA256 hash (0-32)
+			prefix_bytes: Number of bytes to take from the start of SHA256 hash (0-27)
+			suffix_bytes: Number of bytes to take from the end of SHA256 hash (0-27)
 				If both are specified, the middle bytes are skipped.
+				
+		Note:
+			Total bytes (prefix_bytes + suffix_bytes) is limited to 27 to ensure the
+			ASCII representation (54 chars = 13.5 words) plus SHA256 padding fits
+			within a single 64-byte (16-word) SHA256 block.
 		"""
 		self.prefix_bytes = prefix_bytes
 		self.suffix_bytes = suffix_bytes
@@ -23,8 +28,11 @@ class HashConfig:
 			raise ValueError(f"suffix_bytes must be 0-32, got {suffix_bytes}")
 		if prefix_bytes + suffix_bytes < 1:
 			raise ValueError("Must have at least 1 byte total (prefix + suffix)")
-		if prefix_bytes + suffix_bytes > 32:
-			raise ValueError(f"Total bytes ({prefix_bytes} + {suffix_bytes}) cannot exceed 32")
+		if prefix_bytes + suffix_bytes > 27:
+			raise ValueError(
+				f"Total bytes ({prefix_bytes} + {suffix_bytes}) cannot exceed 27. "
+				"This limit ensures the ASCII representation plus SHA256 padding fits in a single block."
+			)
 		if suffix_bytes > 0 and prefix_bytes + suffix_bytes >= 32:
 			raise ValueError("When using suffix, prefix + suffix must be < 32 (must skip at least 1 byte)")
 

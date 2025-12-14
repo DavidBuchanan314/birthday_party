@@ -171,7 +171,8 @@ void truncate_hash(uint32_t hash_full[8], uint32_t hash_trunc[HASH_NUM_UINT32S])
 }
 
 // Convert truncated hash to ASCII representation with SHA256 padding
-// Generic version that works for any HASH_TOTAL_BYTES (1-32)
+// Generic version that works for any HASH_TOTAL_BYTES (1-27)
+// Max 27 bytes ensures ASCII (54 chars) + padding fits in single 64-byte SHA256 block
 void hash_to_ascii_message(uint32_t hash[HASH_NUM_UINT32S], uint32_t msg[16]) {
 	// Convert each nibble to ASCII by adding 'A' (0x41)
 	// Each byte becomes 2 ASCII characters (high nibble, low nibble)
