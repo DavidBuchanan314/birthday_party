@@ -6,7 +6,7 @@ Tests different parameter combinations to find optimal performance.
 
 import json
 from typing import Dict, List, Optional
-from mine import PollardRhoMiner
+from .mine import PollardRhoMiner
 
 
 class ParamOptimizer:
