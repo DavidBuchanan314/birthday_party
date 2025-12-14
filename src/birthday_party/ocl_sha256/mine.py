@@ -3,12 +3,34 @@ import time
 import pyopencl as cl
 import numpy as np
 import hashlib
+import argparse
+import requests
+import threading
+import queue
 
 WORK_SIZE = 0x4000
 STEPS_PER_TASK = 0x400
 MAX_DPS_PER_CALL = 1024  # Maximum DPs to collect per mine() call
+HASH_LENGTH = 8  # bytes (truncated SHA256)
 
-DEBUG = 1
+DEBUG = 0
+
+
+def bytes_to_ascii(x: bytes) -> str:
+	"""Convert bytes to ASCII representation using nibble->ASCII encoding"""
+	return "".join(chr((b >> 4) + ord("A")) + chr((b & 0xF) + ord("A")) for b in x)
+
+
+def hash_fn(x: bytes) -> bytes:
+	"""Hash function matching the OpenCL implementation: truncated SHA256 with nibble->ASCII encoding"""
+	ascii_repr = bytes_to_ascii(x)
+	return hashlib.sha256(ascii_repr.encode()).digest()[:HASH_LENGTH]
+
+
+def is_distinguished(x: bytes, dp_bits: int) -> bool:
+	"""Check if a hash is a distinguished point"""
+	leading_zeroes = len(x) * 8 - int.from_bytes(x, "big").bit_length()
+	return leading_zeroes >= dp_bits
 
 
 class PollardRhoMiner:
@@ -113,25 +135,56 @@ class PollardRhoMiner:
 		return results, rate
 
 
-if __name__ == "__main__":
-	import time
+def submission_worker(
+	server_url: str, username: str, usertoken: str, dp_queue: queue.Queue, stop_event: threading.Event
+):
+	"""Background thread that drains and submits DPs every second."""
+	session = requests.Session()
 
-	def hash_fn(x: bytes):
-		"""Hash function matching the OpenCL implementation: truncated SHA256 with nibble->ASCII encoding"""
-		# Convert each nibble to ASCII by adding 'A' (same as OpenCL implementation)
-		ascii_repr = "".join(chr((b >> 4) + ord("A")) + chr((b & 0xF) + ord("A")) for b in x)
-		return hashlib.sha256(ascii_repr.encode()).digest()[:8]
+	def submit_work(results):
+		try:
+			r = session.post(
+				server_url.rstrip("/") + "/submit_work",
+				json={"username": username, "usertoken": usertoken, "results": results},
+			)
+			if not r.ok:
+				print(f"SERVER ERROR: {r.content}")
+			else:
+				print(f"Server says: {r.json()['status']}")
+		except Exception as e:
+			print(f"Submission error: {e}")
 
-	def is_distinguished(x: bytes, dp_bits: int):
-		"""Check if a hash is a distinguished point"""
-		leading_zeroes = len(x) * 8 - int.from_bytes(x, "big").bit_length()
-		return leading_zeroes >= dp_bits
+	while not stop_event.is_set():
+		time.sleep(1.0)
 
+		# Drain the queue
+		pending_results = []
+		try:
+			while True:
+				pending_results.append(dp_queue.get_nowait())
+		except queue.Empty:
+			pass
+
+		# Submit if we have any DPs
+		if pending_results:
+			print(f"Submitting {len(pending_results)} DPs...")
+			submit_work(pending_results)
+
+
+def mine(server_url: str, username: str, usertoken: str, dp_bits: int = 24):
+	"""Run the mining loop, finding distinguished points and reporting them to the server."""
 	print("Initializing Pollard Rho miner...")
 	miner = PollardRhoMiner()
 
-	print("Running continuous mining loop (Ctrl+C to stop)...")
-	dp_bits = 24
+	# Create queue and background submission thread
+	dp_queue = queue.Queue()
+	stop_event = threading.Event()
+	submission_thread = threading.Thread(
+		target=submission_worker, args=(server_url, username, usertoken, dp_queue, stop_event), daemon=True
+	)
+	submission_thread.start()
+
+	print(f"Running continuous mining loop with dp_bits={dp_bits} (Ctrl+C to stop)...")
 	total_dps = 0
 	total_hashes = 0
 	start_time = time.time()
@@ -139,7 +192,7 @@ if __name__ == "__main__":
 	try:
 		while True:
 			results, rate = miner.mine(dp_bits=dp_bits)
-			print(f"rate: {int(rate):,}H/s")
+			# print(f"rate: {int(rate):,}H/s")
 			total_hashes += miner.work_size * miner.steps_per_task
 
 			if results:
@@ -148,6 +201,15 @@ if __name__ == "__main__":
 				print(
 					f"Found {len(results)} DPs! Total: {total_dps} DPs in {elapsed:.1f}s ({total_hashes/elapsed:,.0f} H/s, {total_dps/elapsed:.2f} DP/s)"
 				)
+
+				# Add DPs to queue for background submission
+				for start_point, dp in results:
+					dp_queue.put(
+						{
+							"start": start_point.hex(),
+							"dp": dp.hex(),
+						}
+					)
 
 				if DEBUG:
 					# Verify first DP
@@ -171,9 +233,29 @@ if __name__ == "__main__":
 					else:
 						print(f"  ✗ ERROR: Could not verify chain (gave up after {iterations} iterations)")
 
-				break  # just for testing
-
 	except KeyboardInterrupt:
 		elapsed = time.time() - start_time
-		print(f"\nStopped. Total: {total_dps} DPs, {total_hashes:,} hashes in {elapsed:.1f}s")
+		print(f"\nStopping... Total: {total_dps} DPs, {total_hashes:,} hashes in {elapsed:.1f}s")
 		print(f"Average: {total_hashes/elapsed:,.0f} H/s, {total_dps/elapsed:.2f} DP/s")
+
+		# Stop the submission thread and wait for it to finish
+		stop_event.set()
+		submission_thread.join(timeout=2.0)
+		print("Shutdown complete.")
+
+
+def main():
+	parser = argparse.ArgumentParser(description="SHA256 OpenCL miner for Birthday Party collision search")
+	parser.add_argument("username", help="Username for authentication")
+	parser.add_argument("usertoken", help="User token for authentication")
+	parser.add_argument("--server", default="http://localhost:8080/", help="Server URL")
+	parser.add_argument(
+		"--dp-bits", type=int, default=24, help="Number of leading zero bits for distinguished points (default: 24)"
+	)
+	args = parser.parse_args()
+
+	mine(args.server, args.username, args.usertoken, args.dp_bits)
+
+
+if __name__ == "__main__":
+	main()
