@@ -14,10 +14,11 @@ class HashConfig:
 				If both are specified, the middle bytes are skipped.
 				
 		Note:
-			Total bytes (prefix_bytes + suffix_bytes) must be between 5 and 27.
+			While individual parameters can be 0-27, their sum (total bytes) must be between 5 and 27:
 			- Minimum 5 bytes ensures sufficient entropy for collision search
 			- Maximum 27 bytes ensures ASCII representation plus SHA256 padding fits
-			  within a single 64-byte (16-word) SHA256 block.
+			  within a single 64-byte (16-word) SHA256 block
+			- When using both prefix and suffix, total must be <= 26 to skip at least 1 byte
 		"""
 		self.prefix_bytes = prefix_bytes
 		self.suffix_bytes = suffix_bytes
@@ -37,6 +38,7 @@ class HashConfig:
 				f"Total bytes ({prefix_bytes} + {suffix_bytes}) cannot exceed 27. "
 				"This limit ensures the ASCII representation plus SHA256 padding fits in a single block."
 			)
+		# When using suffix, require at least 1 byte to be skipped from middle (27 - 1 = 26 max)
 		if suffix_bytes > 0 and prefix_bytes + suffix_bytes > 26:
 			raise ValueError("When using suffix, prefix + suffix must be <= 26 (must skip at least 1 byte)")
 
