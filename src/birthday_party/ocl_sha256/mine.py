@@ -306,7 +306,7 @@ def main():
 		"--dry-run", action="store_true", help="Run without submitting to server (no username/token needed)"
 	)
 	parser.add_argument(
-		"--hash-bytes",
+		"--hash-prefix-bytes",
 		type=int,
 		default=8,
 		help="Number of prefix bytes from SHA256 hash (0-32, default: 8 for backward compatibility)",
@@ -323,7 +323,7 @@ def main():
 	if not args.dry_run and (not args.username or not args.usertoken):
 		parser.error("username and usertoken are required unless --dry-run is specified")
 
-	hash_config = HashConfig(prefix_bytes=args.hash_bytes, suffix_bytes=args.hash_suffix_bytes)
+	hash_config = HashConfig(prefix_bytes=args.hash_prefix_bytes, suffix_bytes=args.hash_suffix_bytes)
 	mine(args.server, args.username, args.usertoken, args.dp_bits, dry_run=args.dry_run, hash_config=hash_config)
 
 

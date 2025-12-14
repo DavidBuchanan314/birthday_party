@@ -44,7 +44,7 @@ def main():
 		"--dp-bits", type=int, default=24, help="Number of leading zero bits for distinguished points (default: 24)"
 	)
 	parser.add_argument(
-		"--hash-bytes",
+		"--hash-prefix-bytes",
 		type=int,
 		default=8,
 		help="Number of prefix bytes from SHA256 hash (0-32, default: 8 for backward compatibility)",
@@ -57,7 +57,7 @@ def main():
 	)
 	args = parser.parse_args()
 
-	hash_config = HashConfig(prefix_bytes=args.hash_bytes, suffix_bytes=args.hash_suffix_bytes)
+	hash_config = HashConfig(prefix_bytes=args.hash_prefix_bytes, suffix_bytes=args.hash_suffix_bytes)
 	start_a = bytes.fromhex(args.start_a)
 	start_b = bytes.fromhex(args.start_b)
 
