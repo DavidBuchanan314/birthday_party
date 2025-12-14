@@ -4,7 +4,6 @@ Meta-optimizer for WORK_SIZE and STEPS_PER_TASK parameters.
 Tests different parameter combinations to find optimal performance.
 """
 
-import json
 from typing import Dict, List, Optional
 from .mine import PollardRhoMiner
 
@@ -67,7 +66,6 @@ class ParamOptimizer:
 		steps_per_task_values: Optional[List[int]] = None,
 		dp_bits: int = 16,
 		num_iterations: int = 10,
-		output_file: str = "optimization_results.json",
 	) -> tuple[List[Dict], Optional[Dict]]:
 		"""Run optimization across parameter space."""
 
@@ -120,16 +118,8 @@ class ParamOptimizer:
 							f"STEPS_PER_TASK={hex(steps_per_task)})"
 						)
 
-				# Save intermediate results
-				self._save_results(output_file)
-
 		self._print_summary()
 		return self.results, self.best_result
-
-	def _save_results(self, output_file: str):
-		"""Save results to JSON file."""
-		with open(output_file, "w") as f:
-			json.dump({"results": self.results, "best": self.best_result}, f, indent=2)
 
 	def _print_summary(self):
 		"""Print optimization summary."""
@@ -181,12 +171,6 @@ def main():
 		default=10,
 		help="Number of iterations per configuration (default: 10)",
 	)
-	parser.add_argument(
-		"--output",
-		type=str,
-		default="optimization_results.json",
-		help="Output file for results (default: optimization_results.json)",
-	)
 	parser.add_argument("--quick", action="store_true", help="Quick test with fewer parameter combinations")
 
 	args = parser.parse_args()
@@ -203,13 +187,11 @@ def main():
 			steps_per_task_values=steps_per_task_values,
 			dp_bits=args.dp_bits,
 			num_iterations=args.iterations,
-			output_file=args.output,
 		)
 	else:
 		optimizer.optimize(
 			dp_bits=args.dp_bits,
 			num_iterations=args.iterations,
-			output_file=args.output,
 		)
 
 
