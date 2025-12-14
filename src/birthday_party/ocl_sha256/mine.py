@@ -212,6 +212,17 @@ def mine(server_url: str, username: str, usertoken: str, dp_bits: int = 24):
 					)
 
 				if DEBUG:
+					# Hash function for verification
+					def hash_fn(x: bytes):
+						"""Hash function matching the OpenCL implementation: truncated SHA256 with nibble->ASCII encoding"""
+						ascii_repr = "".join(chr((b >> 4) + ord("A")) + chr((b & 0xF) + ord("A")) for b in x)
+						return hashlib.sha256(ascii_repr.encode()).digest()[:8]
+
+					def is_distinguished(x: bytes, dp_bits: int):
+						"""Check if a hash is a distinguished point"""
+						leading_zeroes = len(x) * 8 - int.from_bytes(x, "big").bit_length()
+						return leading_zeroes >= dp_bits
+
 					# Verify first DP
 					start_point, dp = results[0]
 					print(f"  Start: {start_point.hex()}")
