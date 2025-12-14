@@ -1,6 +1,6 @@
 # Birthday Party
 
-Implements distributed hash collision search via [parallel pollard's rho with distinguished points](https://www.cs.csi.cuny.edu/~zhangx/papers/P_2018_LISAT_Weber_Zhang.pdf). For background, check out my [blog post](https://www.da.vidbuchanan.co.uk/blog/colliding-secure-hashes.html). My original implementation was too janky to publish, but this version is better (albeit substantially AI-generated - beware misleading in-code comments/strings, AI does not understand the concept well).
+Implements distributed hash collision search via [parallel pollard's rho with distinguished points](https://www.cs.csi.cuny.edu/~zhangx/papers/P_2018_LISAT_Weber_Zhang.pdf) (Brian Weber, Xiaowen Zhang, 2018). For background, check out my [blog post](https://www.da.vidbuchanan.co.uk/blog/colliding-secure-hashes.html). My original implementation was too janky to publish, but this version is better (albeit substantially AI-generated - beware misleading in-code comments/strings, AI does not understand the concept well).
 
 A central server tracks work done, detects collisions, and provides stats in a web dashboard (powered by SQLite).
 
@@ -64,6 +64,8 @@ $ echo -n DHLJJEHPLHFNBDFH | sha256sum
 $ echo -n KDJDDFKGFFHILMCI | sha256sum
 61dfdfcf9964fbb2281a149398d09d98a07551ae01428c3e84e89ea16f8f9729  -
 ```
+
+(Note: finalize config must also match mine config!)
 
 ## Development
 
