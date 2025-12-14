@@ -52,6 +52,8 @@ class PollardRhoMiner:
 
 		# DP buffer: pre-filled with random data, also used for output (4 uint32s = 2 for start + 2 for dp)
 		self.dp_buffer = np.random.randint(0, 2**32, size=(MAX_DPS_PER_CALL, 4), dtype=np.uint32)
+		# Set the first bit of each entry to ensure start points are not distinguished
+		self.dp_buffer[:, 0] |= 0x80000000
 		self.dp_count = np.array([0], dtype=np.uint32)
 
 		self.dp_buffer_buf = cl.Buffer(ctx, cl.mem_flags.READ_WRITE, size=self.dp_buffer.nbytes)
@@ -126,9 +128,12 @@ class PollardRhoMiner:
 			dp = b"".join(int(x).to_bytes(4, "big") for x in self.dp_buffer[i, 2:4])
 			results.append((start_point, dp))
 
-		# Refill dp_buffer with fresh random data for next iteration
-		self.dp_buffer = np.random.randint(0, 2**32, size=(MAX_DPS_PER_CALL, 4), dtype=np.uint32)
-		cl.enqueue_copy(self.queue, self.dp_buffer_buf, self.dp_buffer)
+		# Refill only the used dp_buffer entries with fresh random data for next iteration
+		if num_dps > 0:
+			self.dp_buffer[:num_dps] = np.random.randint(0, 2**32, size=(num_dps, 4), dtype=np.uint32)
+			# Set the first bit of each entry to ensure start points are not distinguished
+			self.dp_buffer[:num_dps, 0] |= 0x80000000
+			cl.enqueue_copy(self.queue, self.dp_buffer_buf, self.dp_buffer)
 
 		duration = time.time() - start
 		num_hashes = self.work_size * self.steps_per_task
@@ -173,28 +178,38 @@ def submission_worker(
 			submit_work(pending_results)
 
 
-def mine(server_url: str, username: str, usertoken: str, dp_bits: int = 24):
+def mine(
+	server_url: str | None = None,
+	username: str | None = None,
+	usertoken: str | None = None,
+	dp_bits: int = 24,
+	dry_run: bool = False,
+):
 	"""Run the mining loop, finding distinguished points and reporting them to the server."""
 	print("Initializing Pollard Rho miner...")
 	miner = PollardRhoMiner()
 
-	# Create queue and background submission thread
-	dp_queue = queue.Queue()
-	stop_event = threading.Event()
-	submission_thread = threading.Thread(
-		target=submission_worker, args=(server_url, username, usertoken, dp_queue, stop_event), daemon=True
-	)
-	submission_thread.start()
+	# Create queue and background submission thread (only if not dry run)
+	dp_queue = None
+	stop_event = None
+	submission_thread = None
+	if not dry_run:
+		dp_queue = queue.Queue()
+		stop_event = threading.Event()
+		submission_thread = threading.Thread(
+			target=submission_worker, args=(server_url, username, usertoken, dp_queue, stop_event), daemon=True
+		)
+		submission_thread.start()
 
-	print(f"Running continuous mining loop with dp_bits={dp_bits} (Ctrl+C to stop)...")
+	mode_str = "DRY RUN" if dry_run else f"submitting to {server_url}"
+	print(f"Running continuous mining loop with dp_bits={dp_bits} ({mode_str}) (Ctrl+C to stop)...")
 	total_dps = 0
 	total_hashes = 0
 	start_time = time.time()
 
 	try:
 		while True:
-			results, rate = miner.mine(dp_bits=dp_bits)
-			# print(f"rate: {int(rate):,}H/s")
+			results, _ = miner.mine(dp_bits=dp_bits)
 			total_hashes += miner.work_size * miner.steps_per_task
 
 			if results:
@@ -204,14 +219,15 @@ def mine(server_url: str, username: str, usertoken: str, dp_bits: int = 24):
 					f"Found {len(results)} DPs! Total: {total_dps} DPs in {elapsed:.1f}s ({total_hashes/elapsed:,.0f} H/s, {total_dps/elapsed:.2f} DP/s)"
 				)
 
-				# Add DPs to queue for background submission
-				for start_point, dp in results:
-					dp_queue.put(
-						{
-							"start": start_point.hex(),
-							"dp": dp.hex(),
-						}
-					)
+				# Add DPs to queue for background submission (only if not dry run)
+				if dp_queue is not None:
+					for start_point, dp in results:
+						dp_queue.put(
+							{
+								"start": start_point.hex(),
+								"dp": dp.hex(),
+							}
+						)
 
 				if DEBUG:
 					# Hash function for verification
@@ -251,23 +267,32 @@ def mine(server_url: str, username: str, usertoken: str, dp_bits: int = 24):
 		print(f"\nStopping... Total: {total_dps} DPs, {total_hashes:,} hashes in {elapsed:.1f}s")
 		print(f"Average: {total_hashes/elapsed:,.0f} H/s, {total_dps/elapsed:.2f} DP/s")
 
-		# Stop the submission thread and wait for it to finish
-		stop_event.set()
-		submission_thread.join(timeout=2.0)
+		if stop_event is not None:
+			stop_event.set()
+		if submission_thread is not None:
+			submission_thread.join(timeout=2.0)
+
 		print("Shutdown complete.")
 
 
 def main():
 	parser = argparse.ArgumentParser(description="SHA256 OpenCL miner for Birthday Party collision search")
-	parser.add_argument("username", help="Username for authentication")
-	parser.add_argument("usertoken", help="User token for authentication")
+	parser.add_argument("username", nargs="?", help="Username for authentication (not needed for --dry-run)")
+	parser.add_argument("usertoken", nargs="?", help="User token for authentication (not needed for --dry-run)")
 	parser.add_argument("--server", default="http://localhost:8080/", help="Server URL")
 	parser.add_argument(
 		"--dp-bits", type=int, default=24, help="Number of leading zero bits for distinguished points (default: 24)"
 	)
+	parser.add_argument(
+		"--dry-run", action="store_true", help="Run without submitting to server (no username/token needed)"
+	)
 	args = parser.parse_args()
 
-	mine(args.server, args.username, args.usertoken, args.dp_bits)
+	# Validate required arguments when not in dry run mode
+	if not args.dry_run and (not args.username or not args.usertoken):
+		parser.error("username and usertoken are required unless --dry-run is specified")
+
+	mine(args.server, args.username, args.usertoken, args.dp_bits, dry_run=args.dry_run)
 
 
 if __name__ == "__main__":
