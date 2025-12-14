@@ -8,6 +8,8 @@ WORK_SIZE = 0x4000
 STEPS_PER_TASK = 0x400
 MAX_DPS_PER_CALL = 1024  # Maximum DPs to collect per mine() call
 
+DEBUG = 1
+
 
 class PollardRhoMiner:
 	def __init__(self, work_size: int = WORK_SIZE, steps_per_task: int = STEPS_PER_TASK) -> None:
@@ -147,7 +149,7 @@ if __name__ == "__main__":
 					f"Found {len(results)} DPs! Total: {total_dps} DPs in {elapsed:.1f}s ({total_hashes/elapsed:,.0f} H/s, {total_dps/elapsed:.2f} DP/s)"
 				)
 
-				if 1:
+				if DEBUG:
 					# Verify first DP
 					start_point, dp = results[0]
 					print(f"  Start: {start_point.hex()}")
