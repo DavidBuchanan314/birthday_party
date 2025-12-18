@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Birthday Party - WebGPU Browser Miner</title>
+    <style>
+        body {
+            font-family: monospace;
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 20px;
+        }
+        pre {
+            background: #f4f4f4;
+            padding: 10px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>Birthday Party WebGPU Miner</h1>
+    <p><strong>Check the browser console (F12) for output.</strong></p>
+
+    <h2>Usage</h2>
+
+    <h3>Dry Run (testing)</h3>
+    <pre>http://localhost:8080/static/browser_miner.html</pre>
+
+    <h3>Submit to Server</h3>
+    <pre>http://localhost:8080/static/browser_miner.html?username=YOUR_USER&usertoken=YOUR_TOKEN</pre>
+
+    <h3>Custom Configuration</h3>
+    <pre>http://localhost:8080/static/browser_miner.html?username=USER&usertoken=TOKEN&server=http://localhost:8080&dp_bits=16</pre>
+
+    <h2>URL Parameters</h2>
+    <ul>
+        <li><code>username</code> - Your username (required for server submission)</li>
+        <li><code>usertoken</code> - Your user token (required for server submission)</li>
+        <li><code>server</code> - Server URL (default: http://localhost:8080)</li>
+        <li><code>dp_bits</code> - Distinguished point bits (default: 16)</li>
+        <li><code>dry_run</code> - Set to "true" to disable submission</li>
+    </ul>
+
+    <script type="module" src="miner.js"></script>
+    <script type="module">
+        // Start mining when page loads
+        startMiner();
+    </script>
+</body>
+</html>
